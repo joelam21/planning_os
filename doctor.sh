@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ============================================================
+# doctor.sh
+# Purpose: Environment health check for this project.
+# This script DOES NOT modify anything — it only inspects
+# and reports the state of the environment to detect drift.
+# ============================================================
+
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$PROJECT_ROOT"
+
+echo "====================================="
+echo "Project Environment Doctor"
+echo "====================================="
+echo "Repo root: $PROJECT_ROOT"
+echo ""
+
+# ------------------------------------------------------------
+# 1. Python
+# ------------------------------------------------------------
+
+echo "[1] Python"
+
+if command -v python >/dev/null 2>&1; then
+    echo "✔ python found: $(which python)"
+    python --version
+else
+    echo "✘ python not found"
+fi
+
+echo ""
+
+# ------------------------------------------------------------
+# 2. Virtual Environment
+# ------------------------------------------------------------
+
+echo "[2] Virtual Environment"
+
+if [ -d ".venv" ]; then
+    echo "✔ .venv exists"
+else
+    echo "✘ .venv missing"
+fi
+
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+    echo "✔ active venv: $VIRTUAL_ENV"
+else
+    echo "⚠ no virtual environment currently active"
+fi
+
+echo ""
+
+# ------------------------------------------------------------
+# 3. Pip
+# ------------------------------------------------------------
+
+echo "[3] pip"
+
+if command -v pip >/dev/null 2>&1; then
+    echo "✔ pip found: $(which pip)"
+    python -m pip --version
+else
+    echo "✘ pip not found"
+fi
+
+echo ""
+
+# ------------------------------------------------------------
+# 4. Snowflake CLI
+# ------------------------------------------------------------
+
+echo "[4] Snowflake CLI"
+
+if [ -x ".venv/bin/snow" ]; then
+    echo "✔ project Snowflake CLI detected"
+    .venv/bin/snow --version
+else
+    echo "⚠ Snowflake CLI not installed in project venv"
+fi
+
+if command -v snow >/dev/null 2>&1; then
+    echo "system snow: $(which snow)"
+fi
+
+echo ""
+
+# ------------------------------------------------------------
+# 5. dbt
+# ------------------------------------------------------------
+
+echo "[5] dbt"
+
+if command -v dbt >/dev/null 2>&1; then
+    echo "✔ dbt detected"
+    dbt --version | head -n 3 || true
+else
+    echo "⚠ dbt not installed"
+fi
+
+echo ""
+
+# ------------------------------------------------------------
+# 6. Environment Variables
+# ------------------------------------------------------------
+
+echo "[6] Environment Variables"
+
+if [ -f ".env" ]; then
+    echo "✔ .env file present"
+else
+    echo "⚠ .env file missing"
+fi
+
+for var in SNOWFLAKE_ACCOUNT SNOWFLAKE_USER SNOWFLAKE_ROLE SNOWFLAKE_WAREHOUSE; do
+    if [ -n "${!var:-}" ]; then
+        echo "✔ $var set"
+    else
+        echo "⚠ $var not set"
+    fi
+done
+
+echo ""
+
+# ------------------------------------------------------------
+# 7. Dependency lock
+# ------------------------------------------------------------
+
+echo "[7] requirements.txt"
+
+if [ -f "requirements.txt" ]; then
+    echo "✔ requirements.txt present"
+else
+    echo "⚠ requirements.txt missing"
+fi
+
+echo ""
+
+echo "====================================="
+echo "Doctor check complete"
+echo "====================================="
