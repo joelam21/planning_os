@@ -8,3 +8,10 @@ __pycache__/
 
 # OS
 .DS_Store
+
+git_setup.sh
+
+scripts/workflow.sh
+
+logs/
+*.log
