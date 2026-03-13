@@ -24,3 +24,10 @@ chmod +x scripts/01_create_repo.sh
 
 chmod +x scripts/02_pin_python_create_venv.sh
 ./scripts/02_pin_python_create_venv.sh
+
+chmod +x scripts/preflight.sh
+./scripts/preflight.sh
+
+git st
+source ./enter.sh
+./scripts/preflight.sh
