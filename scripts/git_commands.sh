@@ -21,6 +21,18 @@ set -euo pipefail
 # ============================================================
 
 COMMAND="${1:-help}"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+EXPECTED_VENV="$PROJECT_ROOT/.venv"
+
+require_project_venv() {
+  if [ "${VIRTUAL_ENV:-}" != "$EXPECTED_VENV" ]; then
+    echo "[git] Project virtual environment is not active."
+    echo "[git] Expected: $EXPECTED_VENV"
+    echo "[git] Current:  ${VIRTUAL_ENV:-<none>}"
+    echo "[git] Run: source ./enter.sh"
+    exit 1
+  fi
+}
 
 require_clean_worktree() {
   if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -55,8 +67,14 @@ Available commands:
   daily-check
     Show branch, status, and recent commit graph.
 
+  stage-all
+    Stage all tracked, untracked, and deleted files.
+
+  stage-paths <path...>
+    Stage only the paths you specify.
+
   daily-commit <commit_message>
-    Stage all changes and commit them.
+    Commit only what is already staged.
 
   create-pr <feature_branch> <title> <body>
     Create a GitHub PR from feature_branch into dev.
@@ -85,6 +103,7 @@ case "$COMMAND" in
     ;;
 
   status)
+    require_project_venv
     echo "[git] Current branch: $(current_branch)"
     git status
     echo ""
@@ -94,6 +113,7 @@ case "$COMMAND" in
     ;;
 
   init-repo)
+    require_project_venv
     echo "[git] Initializing branch structure"
     git branch -M main
     if git show-ref --verify --quiet refs/heads/dev; then
@@ -106,6 +126,7 @@ case "$COMMAND" in
     ;;
 
   start-feature)
+    require_project_venv
     FEATURE_BRANCH="${2:-}"
     if [ -z "$FEATURE_BRANCH" ]; then
       echo "Usage: ./scripts/git_commands.sh start-feature <feature_branch>"
@@ -119,24 +140,51 @@ case "$COMMAND" in
     ;;
 
   daily-check)
+    require_project_venv
     echo "[git] Current branch: $(current_branch)"
     git status
     echo ""
     git log --oneline --graph --decorate --all -10
     ;;
 
+  stage-all)
+    require_project_venv
+    git add -A
+    git status --short
+    ;;
+
+  stage-paths)
+    require_project_venv
+    shift || true
+    if [ "$#" -eq 0 ]; then
+      echo "Usage: ./scripts/git_commands.sh stage-paths <path...>"
+      exit 1
+    fi
+    git add -- "$@"
+    git status --short
+    ;;
+
   daily-commit)
+    require_project_venv
     COMMIT_MESSAGE="${2:-}"
     if [ -z "$COMMIT_MESSAGE" ]; then
       echo "Usage: ./scripts/git_commands.sh daily-commit \"<commit_message>\""
       exit 1
     fi
-    git add .
+    if git diff --cached --quiet; then
+      echo "[git] No staged changes found."
+      echo "[git] Stage intentionally with one of:"
+      echo "  ./scripts/git_commands.sh stage-all"
+      echo "  ./scripts/git_commands.sh stage-paths <path...>"
+      git status --short
+      exit 1
+    fi
     git commit -m "$COMMIT_MESSAGE"
     echo "[git] Commit created on branch: $(current_branch)"
     ;;
 
   create-pr)
+    require_project_venv
     FEATURE_BRANCH="${2:-}"
     PR_TITLE="${3:-}"
     PR_BODY="${4:-}"
@@ -149,6 +197,7 @@ case "$COMMAND" in
     ;;
 
   sync-branches)
+    require_project_venv
     require_clean_worktree
     git checkout dev
     git pull origin dev || true
@@ -158,6 +207,7 @@ case "$COMMAND" in
     ;;
 
   cleanup)
+    require_project_venv
     FEATURE_BRANCH="${2:-}"
     if [ -z "$FEATURE_BRANCH" ]; then
       echo "Usage: ./scripts/git_commands.sh cleanup <feature_branch>"
@@ -173,6 +223,7 @@ case "$COMMAND" in
     ;;
 
   emergency-hotfix)
+    require_project_venv
     HOTFIX_BRANCH="${2:-}"
     if [ -z "$HOTFIX_BRANCH" ]; then
       echo "Usage: ./scripts/git_commands.sh emergency-hotfix <hotfix_branch>"
@@ -186,11 +237,13 @@ case "$COMMAND" in
     ;;
 
   stash-save)
+    require_project_venv
     STASH_MESSAGE="${2:-WIP on $(current_branch)}"
     git stash push -m "$STASH_MESSAGE"
     ;;
 
   stash-pop)
+    require_project_venv
     git stash pop
     ;;
 
