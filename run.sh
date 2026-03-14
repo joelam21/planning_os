@@ -7,17 +7,23 @@ set -euo pipefail
 # This script standardizes how common tasks are executed.
 # ============================================================
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
+EXPECTED_VENV="$PROJECT_ROOT/.venv"
 
 COMMAND="${1:-help}"
 
-# Ensure environment is activated
-if [ -z "${VIRTUAL_ENV:-}" ]; then
-    echo "[run] No active virtual environment detected."
-    echo "Run: source enter.sh"
-    exit 1
-fi
+require_project_venv() {
+    if [ "${VIRTUAL_ENV:-}" != "$EXPECTED_VENV" ]; then
+        echo "[run] Project virtual environment is not active."
+        echo "[run] Expected: $EXPECTED_VENV"
+        echo "[run] Current:  ${VIRTUAL_ENV:-<none>}"
+        echo "[run] Run: source ./enter.sh"
+        exit 1
+    fi
+}
+
+require_project_venv
 
 case "$COMMAND" in
 

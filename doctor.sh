@@ -10,6 +10,19 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
+EXPECTED_VENV="$PROJECT_ROOT/.venv"
+
+require_project_venv() {
+    if [ "${VIRTUAL_ENV:-}" != "$EXPECTED_VENV" ]; then
+        echo "[doctor] Project virtual environment is not active."
+        echo "[doctor] Expected: $EXPECTED_VENV"
+        echo "[doctor] Current:  ${VIRTUAL_ENV:-<none>}"
+        echo "[doctor] Run: source ./enter.sh"
+        exit 1
+    fi
+}
+
+require_project_venv
 
 echo "====================================="
 echo "Project Environment Doctor"
