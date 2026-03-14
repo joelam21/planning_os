@@ -1,5 +1,7 @@
 # planning_os
 
+Repository structure: see docs/REPO_MAP.md
+
 Purpose: <fill>
 
 ## Architecture (initial)
@@ -15,5 +17,5 @@ source ./enter.sh
 ./doctor.sh
 ```
 3) List commands:```bash
-./scripts/run.sh help
+./run.sh help
 ```
