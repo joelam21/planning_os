@@ -99,7 +99,6 @@ echo ""
 echo "[2] Python resolution"
 if command -v python >/dev/null 2>&1; then
   echo "✔ python: $(which python)"
-  python --version
 else
   echo "✘ python not found"
   failures=$((failures + 1))
@@ -108,20 +107,7 @@ check_project_command "python" "$PROJECT_ROOT/.venv/bin/python" "true"
 
 echo ""
 echo "[3] Snowflake + dbt tooling"
-if [ -x ".venv/bin/snow" ]; then
-  echo "✔ snowflake-cli installed in project venv"
-  .venv/bin/snow --version
-else
-  echo "⚠ snowflake-cli not found in project venv"
-fi
 check_project_command "snow" "$PROJECT_ROOT/.venv/bin/snow"
-
-if command -v dbt >/dev/null 2>&1; then
-  echo "✔ dbt available: $(command -v dbt)"
-  dbt --version | head -n 3 || true
-else
-  echo "⚠ dbt not installed"
-fi
 check_project_command "dbt" "$PROJECT_ROOT/.venv/bin/dbt"
 
 echo ""
@@ -170,4 +156,6 @@ if [ "$failures" -eq 0 ]; then
 else
   echo "Preflight complete: $failures core issue(s) and $warnings warning(s) need attention."
 fi
+echo ""
+echo "For full environment diagnostics, run: ./doctor.sh"
 echo "====================================="
