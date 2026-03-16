@@ -88,7 +88,7 @@ echo "[4] Snowflake CLI"
 
 if [ -x ".venv/bin/snow" ]; then
     echo "✔ project Snowflake CLI detected"
-    .venv/bin/snow --version
+    .venv/bin/snow --version || echo "⚠ snow --version failed"
 else
     echo "⚠ Snowflake CLI not installed in project venv"
 fi
@@ -124,6 +124,27 @@ if [ -f ".env" ]; then
     echo "✔ .env file present"
 else
     echo "⚠ .env file missing"
+fi
+
+# Validate .env has all keys from .env.example
+if [ -f ".env.example" ]; then
+    missing_keys=0
+    while IFS= read -r line; do
+        # Skip comments and blank lines
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        key="${line%%=*}"
+        if [ -f ".env" ] && grep -q "^${key}=" ".env"; then
+            true
+        else
+            echo "⚠ $key defined in .env.example but missing from .env"
+            missing_keys=$((missing_keys + 1))
+        fi
+    done < .env.example
+    if [ "$missing_keys" -eq 0 ]; then
+        echo "✔ .env has all keys from .env.example"
+    fi
+else
+    echo "⚠ .env.example not found (cannot validate .env keys)"
 fi
 
 for var in SNOWFLAKE_ACCOUNT SNOWFLAKE_USER SNOWFLAKE_ROLE SNOWFLAKE_WAREHOUSE; do
