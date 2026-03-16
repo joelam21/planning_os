@@ -39,8 +39,8 @@ preflight.sh
 Verifies repository assumptions before running workflows.
 Examples include checking required files, environment configuration, and project structure.
 
-workflow.sh
-Helper utilities for running standardized project workflows.
+WORKFLOW_NOTES.md
+Quick-reference commands for common project workflows and bootstrap steps.
 
 git_commands.sh
 Convenience commands for Git operations used during development.

@@ -11,7 +11,7 @@
 # - .env.example + .env (local)
 # - .gitignore
 # - VS Code interpreter pin (.vscode/settings.json)
-# - enter.sh, doctor.sh, scripts/run.sh
+# - enter.sh, doctor.sh, run.sh
 #
 # Usage:
 #   ./scripts/01_create_repo.sh <project_name>
@@ -178,7 +178,7 @@ else
 fi
 
 # -------------------------------
-# 10) enter.sh / doctor.sh / scripts/run.sh
+# 10) enter.sh / doctor.sh / run.sh
 # -------------------------------
 if [ ! -f "enter.sh" ]; then
   cat > enter.sh << 'EOF'
@@ -238,7 +238,7 @@ fi
 echo ""
 echo "[enter] Next common commands:"
 echo "  ./doctor.sh"
-echo "  ./scripts/run.sh help"
+echo "  ./run.sh help"
 EOF
   chmod +x enter.sh
   echo "✔ Created enter.sh"
@@ -348,8 +348,8 @@ else
   echo "✔ doctor.sh already exists"
 fi
 
-if [ ! -f "scripts/run.sh" ]; then
-  cat > scripts/run.sh << 'EOF'
+if [ ! -f "run.sh" ]; then
+  cat > run.sh << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -358,30 +358,38 @@ set -euo pipefail
 # Purpose: Unified entry point for project workflows.
 # ============================================================
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
+EXPECTED_VENV="$PROJECT_ROOT/.venv"
 
 COMMAND="${1:-help}"
 
-if [ -z "${VIRTUAL_ENV:-}" ]; then
-  echo "[run] No active virtual environment detected."
-  echo "Run: source ./enter.sh"
-  exit 1
-fi
+require_project_venv() {
+    if [ "${VIRTUAL_ENV:-}" != "$EXPECTED_VENV" ]; then
+        echo "[run] Project virtual environment is not active."
+        echo "[run] Expected: $EXPECTED_VENV"
+        echo "[run] Current:  ${VIRTUAL_ENV:-<none>}"
+        echo "[run] Run: source ./enter.sh"
+        exit 1
+    fi
+}
+
+require_project_venv
 
 case "$COMMAND" in
   help)
     echo ""
     echo "Available commands:"
     echo ""
-    echo "  ./scripts/run.sh help          # Show commands"
-    echo "  ./scripts/run.sh doctor        # Run environment health check"
-    echo "  ./scripts/run.sh snow-test     # List Snowflake CLI connections"
-    echo "  ./scripts/run.sh snow-sql-test # Run a simple SQL health check"
-    echo "  ./scripts/run.sh ingest        # Run ingestion step (project-local)"
-    echo "  ./scripts/run.sh transform     # Run dbt models (dbt run)"
-    echo "  ./scripts/run.sh test          # Run dbt tests (dbt test)"
-    echo "  ./scripts/run.sh pipeline      # ingest -> transform -> test"
+    echo "  ./run.sh help          # Show commands"
+    echo "  ./run.sh doctor        # Run environment health check"
+    echo "  ./run.sh snow-test     # List Snowflake CLI connections"
+    echo "  ./run.sh snow-sql-test # Run a simple SQL health check"
+    echo "  ./run.sh dbt-debug     # Run dbt debug"
+    echo "  ./run.sh ingest        # Run ingestion step (project-local)"
+    echo "  ./run.sh transform     # Run dbt models (dbt run)"
+    echo "  ./run.sh test          # Run dbt tests (dbt test)"
+    echo "  ./run.sh pipeline      # ingest -> transform -> test"
     echo ""
     ;;
 
@@ -396,14 +404,24 @@ case "$COMMAND" in
     ;;
 
   snow-sql-test)
-    SNOW_CONNECTION="${SNOW_CONNECTION:-${SNOW_CONNECTION:-my_snowflake}}"
-    # If .env set SNOW_CONNECTION, enter.sh will export it.
+    # Use SNOW_CONNECTION if set, otherwise prefer "my_snowflake" (your current default)
+    SNOW_CONNECTION="${SNOW_CONNECTION:-my_snowflake}"
     echo "[run] Running Snowflake SQL health check using connection: ${SNOW_CONNECTION}"
     .venv/bin/snow sql -c "${SNOW_CONNECTION}" -q "select current_user(), current_role(), current_warehouse();"
     ;;
 
+  dbt-debug)
+    echo "[run] Running dbt debug"
+    dbt debug
+    ;;
+
   ingest)
     echo "[run] Running ingestion step"
+    # Convention: prefer a project-local ingestion script if present.
+    # You can implement one of these later:
+    #   - ./ingestion/run_ingestion.sh
+    #   - ./ingestion/run_ingestion.py
+    #   - ./ingestion/scripts/run.py
     if [ -x "./ingestion/run_ingestion.sh" ]; then
       ./ingestion/run_ingestion.sh
     elif [ -f "./ingestion/run_ingestion.py" ]; then
@@ -438,16 +456,16 @@ case "$COMMAND" in
 
   *)
     echo "Unknown command: $COMMAND"
-    echo "Run './scripts/run.sh help' to see available commands."
+    echo "Run './run.sh help' to see available commands."
     exit 1
     ;;
 
 esac
 EOF
-  chmod +x scripts/run.sh
-  echo "✔ Created scripts/run.sh"
+  chmod +x run.sh
+  echo "✔ Created run.sh"
 else
-  echo "✔ scripts/run.sh already exists"
+  echo "✔ run.sh already exists"
 fi
 
 # -------------------------------
@@ -492,7 +510,7 @@ source ./enter.sh
 3) List commands:\
 \
 \`\`\`bash
-./scripts/run.sh help
+./run.sh help
 \`\`\`
 EOF
   echo "✔ Created README.md"
