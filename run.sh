@@ -10,6 +10,9 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
 EXPECTED_VENV="$PROJECT_ROOT/.venv"
+PROJECT_PYTHON="$EXPECTED_VENV/bin/python"
+PROJECT_SNOW="$EXPECTED_VENV/bin/snow"
+PROJECT_DBT="$EXPECTED_VENV/bin/dbt"
 
 COMMAND="${1:-help}"
 
@@ -31,14 +34,15 @@ case "$COMMAND" in
         echo ""
         echo "Available commands:"
         echo ""
-        echo "  ./scripts/run.sh help          # Show commands"
-        echo "  ./scripts/run.sh doctor        # Run environment health check"
-        echo "  ./scripts/run.sh snow-test     # List Snowflake CLI connections"
-        echo "  ./scripts/run.sh snow-sql-test # Run a simple SQL health check"
-        echo "  ./scripts/run.sh ingest        # Run ingestion step (project-local)"
-        echo "  ./scripts/run.sh transform     # Run dbt models (dbt run)"
-        echo "  ./scripts/run.sh test          # Run dbt tests (dbt test)"
-        echo "  ./scripts/run.sh pipeline      # ingest -> transform -> test"
+        echo "  ./run.sh help          # Show commands"
+        echo "  ./run.sh doctor        # Run environment health check"
+        echo "  ./run.sh snow-test     # List Snowflake CLI connections"
+        echo "  ./run.sh snow-sql-test # Run a simple SQL health check"
+        echo "  ./run.sh dbt-debug     # Run dbt debug"
+        echo "  ./run.sh ingest        # Run ingestion step (project-local)"
+        echo "  ./run.sh transform     # Run dbt models (dbt run)"
+        echo "  ./run.sh test          # Run dbt tests (dbt test)"
+        echo "  ./run.sh pipeline      # ingest -> transform -> test"
         echo ""
         ;;
 
@@ -49,19 +53,19 @@ case "$COMMAND" in
 
     snow-test)
         echo "[run] Listing Snowflake connections (CLI)"
-        .venv/bin/snow connection list
+        "$PROJECT_SNOW" connection list
         ;;
 
     snow-sql-test)
         # Use SNOW_CONNECTION if set, otherwise prefer "my_snowflake" (your current default)
         SNOW_CONNECTION="${SNOW_CONNECTION:-my_snowflake}"
         echo "[run] Running Snowflake SQL health check using connection: ${SNOW_CONNECTION}"
-        .venv/bin/snow sql -c "${SNOW_CONNECTION}" -q "select current_user(), current_role(), current_warehouse();"
+        "$PROJECT_SNOW" sql -c "${SNOW_CONNECTION}" -q "select current_user(), current_role(), current_warehouse();"
         ;;
 
     dbt-debug)
         echo "[run] Running dbt debug"
-        dbt debug
+        "$PROJECT_DBT" debug
         ;;
 
     ingest)
@@ -74,9 +78,9 @@ case "$COMMAND" in
         if [ -x "./ingestion/run_ingestion.sh" ]; then
             ./ingestion/run_ingestion.sh
         elif [ -f "./ingestion/run_ingestion.py" ]; then
-            python ./ingestion/run_ingestion.py
+            "$PROJECT_PYTHON" ./ingestion/run_ingestion.py
         elif [ -f "./ingestion/scripts/run.py" ]; then
-            python ./ingestion/scripts/run.py
+            "$PROJECT_PYTHON" ./ingestion/scripts/run.py
         else
             echo "[run] No ingestion runner found. Create one of:"
             echo "  ./ingestion/run_ingestion.sh (preferred)"
@@ -88,12 +92,12 @@ case "$COMMAND" in
 
     transform)
         echo "[run] Running dbt models (transform)"
-        dbt run
+        "$PROJECT_DBT" run
         ;;
 
     test)
         echo "[run] Running dbt tests"
-        dbt test
+        "$PROJECT_DBT" test
         ;;
 
     pipeline)
@@ -105,7 +109,7 @@ case "$COMMAND" in
 
     *)
         echo "Unknown command: $COMMAND"
-        echo "Run './scripts/run.sh help' to see available commands."
+        echo "Run './run.sh help' to see available commands."
         exit 1
         ;;
 

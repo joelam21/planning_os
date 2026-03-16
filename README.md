@@ -19,3 +19,6 @@ source ./enter.sh
 3) List commands:```bash
 ./run.sh help
 ```
+4) Validate dbt configuration:```bash
+./run.sh dbt-debug
+```
