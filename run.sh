@@ -78,7 +78,7 @@ case "$COMMAND" in
         if [ -x "./ingestion/run_ingestion.sh" ]; then
             ./ingestion/run_ingestion.sh
         elif [ -f "./ingestion/run_ingestion.py" ]; then
-            "$PROJECT_PYTHON" ./ingestion/run_ingestion.py
+            "$PROJECT_PYTHON" -m ingestion.run_ingestion
         elif [ -f "./ingestion/scripts/run.py" ]; then
             "$PROJECT_PYTHON" ./ingestion/scripts/run.py
         else
