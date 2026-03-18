@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: raw
+    database: PLANNING_OS
+    schema: DEV
+    tables:
+      - name: RAW_IOWA_LIQUOR

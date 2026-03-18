@@ -14,3 +14,21 @@ git_setup.sh
 logs/
 *.log
 AGENTS.md
+
+commands_cheatsheet.sh
+
+# dbt artifacts
+target/
+dbt_packages/
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.venv/
+
+# OS / editor
+.DS_Store
+.vscode/
