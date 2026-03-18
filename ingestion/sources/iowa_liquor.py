@@ -1,3 +1,4 @@
+import os
 import requests
 from datetime import datetime, UTC
 
@@ -25,6 +26,12 @@ def fetch_rows(
     if end_date:
         where_clauses.append(f"date <= '{end_date}T23:59:59'")
 
+    app_token = os.getenv("SOCRATA_APP_TOKEN")
+    if app_token:
+        print("[iowa_liquor] Using Socrata app token")
+    else:
+        print("[iowa_liquor] No Socrata app token found")
+
     all_rows: list[dict] = []
     offset = 0
     batch_count = 0
@@ -35,6 +42,8 @@ def fetch_rows(
             "$limit": batch_size,
             "$offset": offset,
         }
+        if app_token:
+            params["$$app_token"] = app_token
 
         if where_clauses:
             params["$where"] = " AND ".join(where_clauses)
