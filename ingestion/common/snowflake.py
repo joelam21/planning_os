@@ -59,6 +59,44 @@ def create_sample_table(conn, schema: str, table_name: str) -> None:
     conn.commit()
 
 
+def delete_iowa_liquor_date_range(
+    conn,
+    schema: str,
+    table_name: str,
+    start_date: str | None,
+    end_date: str | None,
+) -> None:
+    if table_name != "RAW_IOWA_LIQUOR":
+        return
+
+    if not start_date and not end_date:
+        return
+
+    where_clauses = []
+    params: list[str] = []
+
+    if start_date:
+        where_clauses.append("date >= %s")
+        params.append(start_date)
+
+    if end_date:
+        where_clauses.append("date <= %s")
+        params.append(end_date)
+
+    if not where_clauses:
+        return
+
+    sql = f"""
+    DELETE FROM {schema}.{table_name}
+    WHERE {" AND ".join(where_clauses)}
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+
+    conn.commit()
+
+
 def insert_sample_rows(conn, schema: str, table_name: str, rows: list[dict]) -> None:
     if table_name == "RAW_IOWA_LIQUOR":
         sql = f"""
