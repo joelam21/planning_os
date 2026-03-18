@@ -17,9 +17,9 @@ def connect(config: dict[str, str]):
     )
 
 
-def create_sample_table(conn, schema: str) -> None:
+def create_sample_table(conn, schema: str, table_name: str) -> None:
     sql = f"""
-    CREATE TABLE IF NOT EXISTS {schema}.RAW_INGESTION_SAMPLE (
+    CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
         source_id VARCHAR,
         source_name VARCHAR,
         loaded_at TIMESTAMP_NTZ
@@ -30,9 +30,9 @@ def create_sample_table(conn, schema: str) -> None:
     conn.commit()
 
 
-def insert_sample_rows(conn, schema: str, rows: list[dict]) -> None:
+def insert_sample_rows(conn, schema: str, table_name: str, rows: list[dict]) -> None:
     sql = f"""
-    INSERT INTO {schema}.RAW_INGESTION_SAMPLE (
+    INSERT INTO {schema}.{table_name} (
         source_id,
         source_name,
         loaded_at
