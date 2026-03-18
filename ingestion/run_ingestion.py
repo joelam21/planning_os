@@ -8,14 +8,14 @@ from ingestion.common.snowflake import (
 from ingestion.sources.sample import fetch_rows as fetch_sample_rows
 
 
-def get_rows_for_source(source: str) -> list[dict]:
+def get_rows_for_source(source: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
     if source == "sample":
         return fetch_sample_rows()
 
     if source == "iowa_liquor":
         from ingestion.sources.iowa_liquor import fetch_rows as fetch_iowa_rows
 
-        return fetch_iowa_rows()
+        return fetch_iowa_rows(start_date=start_date, end_date=end_date)
 
     raise ValueError(f"Unsupported source: {source}")
 
@@ -36,6 +36,16 @@ def main() -> None:
         "--source",
         default="sample",
         help="Source to ingest from (default: sample)",
+    )
+    parser.add_argument(
+        "--start-date",
+        default=None,
+        help="Start date (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--end-date",
+        default=None,
+        help="End date (YYYY-MM-DD)",
     )
     args = parser.parse_args()
 
@@ -60,7 +70,11 @@ def main() -> None:
             f"[ingestion] Ensured table exists: {config['database']}.{schema}.{table_name}"
         )
 
-        rows = get_rows_for_source(args.source)
+        rows = get_rows_for_source(
+            args.source,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
         insert_sample_rows(conn, schema, table_name, rows)
         print(f"[ingestion] Inserted {len(rows)} rows for source={args.source}")
 
