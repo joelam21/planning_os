@@ -8,14 +8,26 @@ from ingestion.common.snowflake import (
 from ingestion.sources.sample import fetch_rows as fetch_sample_rows
 
 
-def get_rows_for_source(source: str, start_date: str | None = None, end_date: str | None = None) -> list[dict]:
+def get_rows_for_source(
+    source: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    batch_size: int | None = None,
+    max_batches: int | None = None,
+) -> list[dict]:
     if source == "sample":
         return fetch_sample_rows()
 
     if source == "iowa_liquor":
         from ingestion.sources.iowa_liquor import fetch_rows as fetch_iowa_rows
 
-        return fetch_iowa_rows(start_date=start_date, end_date=end_date)
+        kwargs = {"start_date": start_date, "end_date": end_date}
+        if batch_size is not None:
+            kwargs["batch_size"] = batch_size
+        if max_batches is not None:
+            kwargs["max_batches"] = max_batches
+
+        return fetch_iowa_rows(**kwargs)
 
     raise ValueError(f"Unsupported source: {source}")
 
@@ -47,6 +59,18 @@ def main() -> None:
         default=None,
         help="End date (YYYY-MM-DD)",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Rows to request per API batch",
+    )
+    parser.add_argument(
+        "--max-batches",
+        type=int,
+        default=None,
+        help="Maximum number of API batches to fetch",
+    )
     args = parser.parse_args()
 
     print(f"[ingestion] Starting ingestion step for source={args.source}")
@@ -74,6 +98,8 @@ def main() -> None:
             args.source,
             start_date=args.start_date,
             end_date=args.end_date,
+            batch_size=args.batch_size,
+            max_batches=args.max_batches,
         )
         insert_sample_rows(conn, schema, table_name, rows)
         print(f"[ingestion] Inserted {len(rows)} rows for source={args.source}")
