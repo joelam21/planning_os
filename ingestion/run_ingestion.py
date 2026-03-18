@@ -20,6 +20,16 @@ def get_rows_for_source(source: str) -> list[dict]:
     raise ValueError(f"Unsupported source: {source}")
 
 
+def get_table_name_for_source(source: str) -> str:
+    if source == "sample":
+        return "RAW_INGESTION_SAMPLE"
+
+    if source == "iowa_liquor":
+        return "RAW_IOWA_LIQUOR"
+
+    raise ValueError(f"Unsupported source: {source}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run ingestion for a selected source")
     parser.add_argument(
@@ -44,13 +54,14 @@ def main() -> None:
         print("[ingestion] Connected to Snowflake")
 
         schema = config["schema"]
-        create_sample_table(conn, schema)
+        table_name = get_table_name_for_source(args.source)
+        create_sample_table(conn, schema, table_name)
         print(
-            f"[ingestion] Ensured table exists: {config['database']}.{schema}.RAW_INGESTION_SAMPLE"
+            f"[ingestion] Ensured table exists: {config['database']}.{schema}.{table_name}"
         )
 
         rows = get_rows_for_source(args.source)
-        insert_sample_rows(conn, schema, rows)
+        insert_sample_rows(conn, schema, table_name, rows)
         print(f"[ingestion] Inserted {len(rows)} rows for source={args.source}")
 
     finally:
