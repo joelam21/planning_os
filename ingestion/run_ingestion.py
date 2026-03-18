@@ -3,6 +3,7 @@ from ingestion.common.config import load_env_file, get_snowflake_config
 from ingestion.common.snowflake import (
     connect,
     create_sample_table,
+    delete_iowa_liquor_date_range,
     insert_sample_rows,
 )
 from ingestion.sources.sample import fetch_rows as fetch_sample_rows
@@ -92,6 +93,14 @@ def main() -> None:
         create_sample_table(conn, schema, table_name)
         print(
             f"[ingestion] Ensured table exists: {config['database']}.{schema}.{table_name}"
+        )
+
+        delete_iowa_liquor_date_range(
+            conn,
+            schema,
+            table_name,
+            args.start_date,
+            args.end_date,
         )
 
         rows = get_rows_for_source(
