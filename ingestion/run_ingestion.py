@@ -4,6 +4,7 @@ from ingestion.common.snowflake import (
     create_sample_table,
     insert_sample_rows,
 )
+from ingestion.sources.sample import fetch_rows
 
 
 def main() -> None:
@@ -27,10 +28,7 @@ def main() -> None:
             f"[ingestion] Ensured table exists: {config['database']}.{schema}.RAW_INGESTION_SAMPLE"
         )
 
-        rows = [
-            {"source_id": "1", "source_name": "sample_alpha"},
-            {"source_id": "2", "source_name": "sample_beta"},
-        ]
+        rows = fetch_rows()
         insert_sample_rows(conn, schema, rows)
         print(f"[ingestion] Inserted {len(rows)} sample rows")
 
