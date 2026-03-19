@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: dim_store
+    description: "Store dimension table with store-level attributes"
+    columns:
+      - name: store_number
+        description: "Unique identifier for a store"
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_item
+    description: "Item dimension table with product-level attributes"
+    columns:
+      - name: item_number
+        description: "Unique identifier for an item"
+        tests:
+          - not_null
+          - unique
+
+  - name: fct_liquor_sales
+    description: "Fact table at invoice line-item grain for liquor sales"
+    columns:
+      - name: invoice_item_number
+        description: "Unique identifier for each invoice line item"
+        tests:
+          - not_null
+          - unique
+
+      - name: store_number
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_store')
+                field: store_number
+
+      - name: item_number
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_item')
+                field: item_number

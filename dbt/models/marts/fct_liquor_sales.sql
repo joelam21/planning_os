@@ -1,0 +1,18 @@
+select
+    invoice_item_number,
+    order_date,
+    store_number,
+    item_number,
+    vendor_number,
+    category,
+
+
+    bottles_sold,
+    sale_dollars,
+    volume_sold_liters,
+    volume_sold_gallons,
+    estimated_total_cost,
+    estimated_gross_profit,
+
+    loaded_at
+from {{ ref('int_iowa_liquor_sales') }}
