@@ -8,6 +8,7 @@ models:
         description: "Unique invoice line identifier from the Iowa liquor source."
         tests:
           - not_null
+          - unique
 
       - name: order_date
         description: "Transaction date from the raw source."
