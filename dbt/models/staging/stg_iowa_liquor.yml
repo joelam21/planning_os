@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: stg_iowa_liquor
+    description: "Cleaned and typed staging model for Iowa liquor sales data."
+    columns:
+      - name: invoice_item_number
+        description: "Unique invoice line identifier from the Iowa liquor source."
+        tests:
+          - not_null
+
+      - name: order_date
+        description: "Transaction date from the raw source."
+        tests:
+          - not_null
+
+      - name: store_number
+        description: "Store identifier from the source system."
+        tests:
+          - not_null
+
+      - name: item_number
+        description: "Product/item identifier from the source system."
+        tests:
+          - not_null
+
+      - name: sale_dollars
+        description: "Total sale amount in USD."
+        tests:
+          - not_null
+
+      - name: bottles_sold
+        description: "Number of bottles sold in the transaction."
+        tests:
+          - not_null
