@@ -4,5 +4,73 @@
     "editor.formatOnSave": true,
     "files.exclude": {
         "**/__pycache__": true
-    }
+    },
+    "terminal.integrated.env.osx": {},
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "Local instance 3306",
+            "database": "Brazilian Ecomm",
+            "username": "root",
+            "password": "Partycat$21"
+        },
+        {
+            "name": "Snowflake",
+            "driver": "Snowflake",
+            "account": "${env:DBT_ACCOUNT}",
+            "username": "${env:DBT_USER}",
+            "password": "${env:DBT_PASSWORD}",
+            "warehouse": "COMPUTE_WH",
+            "database": "MY_DBT_PROJECT",
+            "schema": "RAW",
+            "role": "ACCOUNTADMIN",
+            "authenticator": "snowflake",
+            "previewLimit": 50,
+            "extraOptions": {
+                "ocspFailOpen": true,
+                "clientSessionKeepAlive": true,
+                "clientSessionKeepAliveHeartbeatFrequency": 3600
+            }
+        },
+        {
+            "name": "xxsnowflake_dbt",
+            "driver": "Snowflake",
+            "account": "${env:DBT_ACCOUNT}",
+            "username": "${env:DBT_USER}",
+            "password": "${env:DBT_PASSWORD}",
+            "warehouse": "${env:DBT_WAREHOUSE}",
+            "database": "${env:DBT_DATABASE}",
+            "snowflakeOptions": {
+                "schema": "${env:DBT_SCHEMA}",
+                "role": "${env:DBT_ROLE}"
+            }
+        },
+        {
+            "authenticator": "SNOWFLAKE",
+            "ocspOptions": {
+                "ocspFailOpen": true
+            },
+            "snowflakeOptions": {
+                "clientSessionKeepAlive": true,
+                "clientSessionKeepAliveHeartbeatFrequency": 3600,
+                "schema": "DEV",
+                "role": "ACCOUNTADMIN"
+            },
+            "previewLimit": 50,
+            "driver": "Snowflake",
+            "name": "PLANNING",
+            "account": "STHKDLC-NRB37885",
+            "username": "joelam",
+            "password": "Wrestlemaniac123",
+            "database": "PLANNING_OS",
+            "warehouse": "COMPUTE_WH"
+        }
+    ]
 }
