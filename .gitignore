@@ -33,3 +33,7 @@ __pycache__/
 .DS_Store
 .vscode/
 dbt_internal_packages/
+
+# exploratoinn notebooks
+notebooks/query_exploration_notebook.ipynb
+
