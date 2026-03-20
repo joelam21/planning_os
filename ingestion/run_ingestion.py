@@ -15,6 +15,7 @@ def get_rows_for_source(
     end_date: str | None = None,
     batch_size: int | None = None,
     max_batches: int | None = None,
+    on_batch=None,
 ) -> list[dict]:
     if source == "sample":
         return fetch_sample_rows()
@@ -27,6 +28,8 @@ def get_rows_for_source(
             kwargs["batch_size"] = batch_size
         if max_batches is not None:
             kwargs["max_batches"] = max_batches
+        if on_batch is not None:
+            kwargs["on_batch"] = on_batch
 
         return fetch_iowa_rows(**kwargs)
 
@@ -103,15 +106,36 @@ def main() -> None:
             args.end_date,
         )
 
-        rows = get_rows_for_source(
-            args.source,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            batch_size=args.batch_size,
-            max_batches=args.max_batches,
-        )
-        insert_sample_rows(conn, schema, table_name, rows)
-        print(f"[ingestion] Inserted {len(rows)} rows for source={args.source}")
+        inserted_row_count = 0
+
+        if args.source == "iowa_liquor":
+            def handle_batch(batch_rows: list[dict]) -> None:
+                nonlocal inserted_row_count
+                if not batch_rows:
+                    return
+                insert_sample_rows(conn, schema, table_name, batch_rows)
+                inserted_row_count += len(batch_rows)
+
+            get_rows_for_source(
+                args.source,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                batch_size=args.batch_size,
+                max_batches=args.max_batches,
+                on_batch=handle_batch,
+            )
+        else:
+            rows = get_rows_for_source(
+                args.source,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                batch_size=args.batch_size,
+                max_batches=args.max_batches,
+            )
+            insert_sample_rows(conn, schema, table_name, rows)
+            inserted_row_count = len(rows)
+
+        print(f"[ingestion] Inserted {inserted_row_count} rows for source={args.source}")
 
     finally:
         if conn is not None:

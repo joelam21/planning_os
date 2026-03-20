@@ -13,6 +13,7 @@ def fetch_rows(
     end_date: str | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_batches: int = DEFAULT_MAX_BATCHES,
+    on_batch=None,
 ) -> list[dict]:
     """
     Fetch Iowa liquor data in batches and normalize it into
@@ -55,8 +56,9 @@ def fetch_rows(
         if not data:
             break
 
+        batch_rows: list[dict] = []
         for record in data:
-            all_rows.append(
+            batch_rows.append(
                 {
                     "invoice_item_number": record.get("invoice_line_no"),
                     "date": record.get("date", "")[:10] if record.get("date") else None,
@@ -90,10 +92,18 @@ def fetch_rows(
                 }
             )
 
+        if on_batch is not None:
+            on_batch(batch_rows)
+        else:
+            all_rows.extend(batch_rows)
+
         if len(data) < batch_size:
             break
 
         offset += batch_size
         batch_count += 1
+
+    if on_batch is not None:
+        return []
 
     return all_rows
