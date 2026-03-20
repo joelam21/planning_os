@@ -1,3 +1,12 @@
+{{
+    config(
+        materialized='incremental',
+        unique_key='invoice_item_number',
+        incremental_strategy='merge',
+        on_schema_change='fail'
+    )
+}}
+
 select
     invoice_item_number,
     order_date,
@@ -5,7 +14,6 @@ select
     item_number,
     vendor_number,
     category,
-
 
     bottles_sold,
     sale_dollars,
@@ -15,4 +23,12 @@ select
     estimated_gross_profit,
 
     loaded_at
+
 from {{ ref('int_iowa_liquor_sales') }}
+
+{% if is_incremental() %}
+    where loaded_at >= (
+        select dateadd('day', -3, max(loaded_at))
+        from {{ this }}
+    )
+{% endif %}
