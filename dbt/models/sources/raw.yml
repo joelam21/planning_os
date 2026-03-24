@@ -6,3 +6,8 @@ sources:
     schema: DEV
     tables:
       - name: RAW_IOWA_LIQUOR
+        config:
+          loaded_at_field: loaded_at
+          freshness:
+            warn_after: { count: 7, period: day }
+            error_after: { count: 14, period: day }
