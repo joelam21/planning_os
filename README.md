@@ -1,4 +1,3 @@
-
 # planning_os
 
 ## Overview
@@ -123,3 +122,27 @@ source ./enter.sh
 ## Repository Structure
 
 See: `docs/REPO_MAP.md`
+
+## Pipeline Health
+
+### What constitutes a healthy weekly run
+
+A run is considered **healthy** when all of the following pass:
+
+| Check | Tool | Threshold | Failure type |
+|---|---|---|---|
+| Source freshness | `dbt source freshness` | loaded within 7 days | WARN > 7d / ERROR > 14d |
+| All schema tests | `dbt test` | PASS=N, WARN=0, ERROR=0 | ERROR blocks merge |
+| Grain integrity | `assert_fct_store_daily_no_duplicate_store_day` | 0 rows returned | ERROR |
+| Reconciliation | `assert_fct_store_daily_matches_fact_aggregates` | 0 rows returned | ERROR |
+| Date coverage | `assert_no_dates_lost_in_staging` | 0 rows returned | ERROR |
+| Business rules | `assert_no_negative_*` | 0 rows returned | ERROR |
+| Pipeline health view | `MON_PIPELINE_HEALTH.freshness_status` | PASS | WARN/ERROR triggers manual review |
+
+### Run sequence
+
+```bash
+dbt source freshness
+dbt build
+snow sql -c my_snowflake -q "select * from PLANNING_OS.DEV.MON_PIPELINE_HEALTH"
+```
