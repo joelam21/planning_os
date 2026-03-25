@@ -101,8 +101,10 @@ case "$COMMAND" in
         ;;
 
     pipeline)
-        echo "[run] Running full pipeline: ingest -> transform -> test"
+        echo "[run] Running full pipeline: ingest -> snapshot -> transform -> test"
         "$0" ingest
+        echo "[run] Running snapshots"
+        "$PROJECT_DBT" snapshot
         "$0" transform
         "$0" test
         ;;
