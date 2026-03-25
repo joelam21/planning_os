@@ -1,0 +1,30 @@
+version: 2
+
+exposures:
+  - name: store_performance_analysis_notebook
+    type: analysis
+    maturity: medium
+    url: "notebooks/01_store_performance_analysis.ipynb"
+    description: "Notebook analysis of market structure, chain performance, and store productivity."
+    depends_on:
+      - ref('fct_store_daily_sales')
+      - ref('dim_store')
+      - ref('dim_item')
+    owner:
+      name: Joel Am
+      email: joelam21@gmail.com
+
+  - name: query_exploration_notebook
+    type: analysis
+    maturity: low
+    url: "notebooks/query_exploration_notebook.ipynb"
+    description: "Ad hoc exploration notebook used for model validation, pipeline checks, and profiling."
+    depends_on:
+      - ref('fct_liquor_sales')
+      - ref('fct_store_daily_sales')
+      - ref('dim_store')
+      - ref('dim_item')
+      - ref('mon_pipeline_health')
+    owner:
+      name: Joel Am
+      email: joelam21@gmail.com

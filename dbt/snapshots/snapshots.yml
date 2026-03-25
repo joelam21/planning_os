@@ -1,0 +1,22 @@
+version: 2
+
+snapshots:
+  - name: snap_store
+    description: "Type 2 snapshot of store attributes with effective dating."
+    columns:
+      - name: store_number
+        description: "{{ doc('store_number') }}"
+      - name: dbt_valid_from
+        description: "{{ doc('dbt_valid_from') }}"
+      - name: dbt_valid_to
+        description: "{{ doc('dbt_valid_to') }}"
+
+  - name: snap_item
+    description: "Type 2 snapshot of item attributes with effective dating."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+      - name: dbt_valid_from
+        description: "{{ doc('dbt_valid_from') }}"
+      - name: dbt_valid_to
+        description: "{{ doc('dbt_valid_to') }}"

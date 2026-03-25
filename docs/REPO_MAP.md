@@ -1,146 +1,175 @@
 Repository Map
 
-This document explains the structure and intended purpose of the planning_os repository.
+This document explains the current structure and operational purpose of the `planning_os` repository.
 
-The goal of this repo is to build a structured analytics system for planning, forecasting, and operational intelligence. The project is currently in a scaffold stage and will expand over time.
+The goal of this repo is to build a production-style analytics system for ingestion, transformation, validation, and analysis using Iowa liquor sales data.
 
-⸻
+---
 
 Root Directory
 
-These files represent the primary entrypoints and operational scripts for the repository.
+These files are the primary entrypoints and operational scripts.
 
-enter.sh
-Activates the project’s local Python environment (.venv).
-This should typically be run before executing other scripts.
+`enter.sh`
+Activates the project local Python virtual environment (`.venv`) and loads environment context.
 
-run.sh
-Primary task runner for the project.
-Intended to provide a consistent command interface for workflows such as running checks, executing dbt tasks, or starting ingestion processes.
+`run.sh`
+Primary task runner for project workflows. Supports:
+- `doctor`
+- `snow-test`
+- `snow-sql-test`
+- `dbt-debug`
+- `ingest`
+- `transform`
+- `test`
+- `pipeline` (ingest -> snapshot -> transform -> test), including optional date-window parameters.
 
-doctor.sh
-Diagnostic script used to verify the system environment and detect configuration issues.
+`doctor.sh`
+Environment diagnostics and setup validation.
 
-requirements.txt
-Pinned Python dependencies used by the project.
+`requirements.txt`
+Pinned Python and dbt-related dependencies.
 
-README.md
-Project overview and quickstart instructions.
+`README.md`
+Project overview, architecture, operational health criteria, and run procedures.
 
-⸻
-
-scripts/
-
-Automation and workflow helper scripts.
-
-These scripts implement operational tooling used by the repo.
-
-preflight.sh
-Verifies repository assumptions before running workflows.
-Examples include checking required files, environment configuration, and project structure.
-
-WORKFLOW_NOTES.md
-Quick-reference commands for common project workflows and bootstrap steps.
-
-git_commands.sh
-Convenience commands for Git operations used during development.
-
-⸻
-
-docs/
-
-Documentation and operational references.
-
-PROJECT_START.md
-Instructions for starting work in the project.
-
-MODEL_CHECKLIST.md
-Checklist for validating analytics or modeling work.
-
-REPO_MAP.md
-This document. Provides a structural overview of the repository.
-
-Future documentation may include:
-	•	RUNBOOK.md (operational procedures)
-	•	DECISIONS.md (architectural decisions)
-	•	STATUS.md (current project maturity and focus)
-
-⸻
+---
 
 dbt/
 
-Planned location for dbt transformation models.
+Transformation and semantic modeling layer.
 
-Expected contents may include:
-	•	dbt project configuration
-	•	model definitions
-	•	tests
-	•	macros
+Current structure includes:
 
-This directory is currently scaffolded but not yet implemented.
+`dbt/models/sources/`
+- source definitions and freshness checks
+- `raw.yml` defines `RAW_IOWA_LIQUOR` and freshness thresholds
 
-⸻
+`dbt/models/staging/`
+- cleaned and typed raw-source models
+- `stg_iowa_liquor.sql` and associated tests
+
+`dbt/models/int/`
+- intermediate business logic and derived metrics
+- `int_iowa_liquor_sales.sql`
+
+`dbt/models/marts/`
+- facts, dimensions, and monitoring models
+- `fct_liquor_sales` (atomic grain)
+- `fct_store_daily_sales` (store-day aggregate)
+- `dim_store` (Type 1 current-state from snapshot)
+- `dim_item` (Type 1 current-state from snapshot)
+- `mon_pipeline_health` (operational health summary)
+- `schema.yml` model-level metadata and tests
+
+`dbt/snapshots/`
+- Type 2 historical entity tracking
+- `snap_store.sql`
+- `snap_item.sql`
+- `snapshots.yml` metadata for snapshot docs
+
+`dbt/tests/`
+- singular data tests including:
+  - business-rule checks
+  - fact-to-mart reconciliation checks
+  - grain integrity checks
+  - raw-to-staging date preservation checks
+
+`dbt/models/docs/`
+- centralized reusable column definitions (`column_definitions.md`) used via `{{ doc(...) }}` references.
+
+`dbt/models/exposures.yml`
+- notebook exposures and model lineage for analysis dependencies.
+
+---
 
 ingestion/
 
-Planned location for data ingestion logic.
+Python ingestion pipeline and Snowflake loading helpers.
 
-Future responsibilities may include:
-	•	pulling raw data from APIs or databases
-	•	staging raw datasets
-	•	preparing data for transformation
+`ingestion/run_ingestion.py`
+CLI ingestion runner with source/date window parameters.
 
-Currently scaffolded but not yet implemented.
+`ingestion/sources/iowa_liquor.py`
+Socrata API fetch logic with batching and optional date filters.
 
-⸻
+`ingestion/common/snowflake.py`
+Snowflake connection, table creation, insert, and date-range deletion helpers.
+
+---
 
 notebooks/
 
-Exploratory analysis and experimentation.
+Exploratory analysis and validation notebooks.
 
-These notebooks are not considered production code and may contain temporary analysis.
+`01_store_performance_analysis.ipynb`
+Primary analysis notebook for market structure and store productivity.
 
-⸻
+`query_exploration_notebook.ipynb`
+Ad hoc validation and exploration notebook (including pipeline health checks).
+
+---
+
+docs/
+
+Project documentation and references.
+
+`PROJECT_START.md`
+Project startup guidance.
+
+`MODEL_CHECKLIST.md`
+Model design checklist (grain, key, business question, layer placement).
+
+`REPO_MAP.md`
+This document.
+
+---
+
+scripts/
+
+Automation and workflow helper scripts for setup/bootstrap and local workflows.
+
+---
 
 logs/
 
-Runtime logs produced by scripts or workflows.
+Runtime/query logs for local diagnostics and troubleshooting.
 
-These files are generally not version controlled and exist for local debugging and diagnostics.
-
-⸻
+---
 
 .venv/
 
-Local Python virtual environment.
+Local Python virtual environment (not tracked in Git).
 
-This directory contains installed Python dependencies and is not tracked in Git.
-
-⸻
+---
 
 Current Project State
 
-The repository currently functions as a scaffold and workflow foundation.
+The repository is beyond scaffold stage and currently supports:
 
 Completed:
-	•	Git workflow setup
-	•	environment management
-	•	repository structure
-	•	workflow and validation scripts
+- ingestion with parameterized date-window loading
+- dbt layered modeling (staging -> intermediate -> marts)
+- atomic and aggregated fact models
+- Type 1 current-state dimensions backed by Type 2 snapshots
+- custom data quality tests (business rules, grain, reconciliation, completeness)
+- source freshness checks
+- pipeline health model
+- parameterized pipeline execution in `run.sh`
+- notebook exposures and centralized dbt column docs
 
-Planned next areas of development:
-	•	dbt transformation models
-	•	ingestion pipelines
-	•	operational analytics workflows
+Near-term roadmap:
+- CI workflow for dbt parse/validation
+- scheduling hardening and alerting
+- continued documentation alignment and maintainability improvements
 
-⸻
+---
 
 Design Principles
 
-This repository is structured around several goals:
-	•	predictable project structure
-	•	reproducible environments
-	•	clear operational entrypoints
-	•	minimal workflow drift between documentation and scripts
-	•	long-term maintainability
-:::
+This repository is structured around:
+- explicit grain and model contracts
+- reproducible environments and deterministic workflows
+- validation-first iteration
+- minimal drift between code, docs, and operations
+- long-term maintainability and operational clarity
