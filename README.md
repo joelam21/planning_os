@@ -159,6 +159,7 @@ Use the parameterized pipeline command to run a bounded ingestion window plus sn
   --end-date 2021-08-07 \
   --batch-size 1000 \
   --max-batches 300
+```
 
 ### Dimension Design: Type 1 vs Type 2
 
