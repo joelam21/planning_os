@@ -113,10 +113,10 @@ source ./enter.sh
 ## Next Steps
 
 - Expand historical data coverage (month-by-month ingestion)
-- Improve chain classification as dataset grows
-- Implement idempotent incremental ingestion
-- Add orchestration (Airflow or equivalent)
-- Explore time series and forecasting
+- Harden automated scheduling and failure notifications
+- Add lightweight CI for dbt parse/validation checks
+- Evolve chain classification logic as data volume grows
+- Expand analysis with time series and product-mix segmentation
 
 ---
 
