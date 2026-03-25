@@ -51,11 +51,12 @@ API → Python Ingestion → Snowflake (RAW)
 - `fct_store_daily_sales` → aggregated grain (store × day)
 
 ### Dimension Tables
-- `dim_store`
-  - Type 1 (current-state)
-  - latest record per `store_number`
-  - future enhancement: SCD Type 2
-- `dim_item`
+- `dim_store` → Type 1 (current-state), derived from `snap_store`
+- `dim_item` → Type 1 (current-state), derived from `snap_item`
+
+### Snapshots
+- `snap_store` → Type 2 (SCD), full store attribute history
+- `snap_item` → Type 2 (SCD), full item attribute history
 
 ---
 
@@ -145,4 +146,38 @@ A run is considered **healthy** when all of the following pass:
 dbt source freshness
 dbt build
 snow sql -c my_snowflake -q "select * from PLANNING_OS.DEV.MON_PIPELINE_HEALTH"
+```
+
+### Dimension Design: Type 1 vs Type 2
+
+**Current-state dimensions (Type 1)**
+- `dim_store` → latest known attributes per store, derived from `snap_store`
+- `dim_item` → latest known attributes per item, derived from `snap_item`
+
+**Historical snapshots (Type 2)**
+- `snap_store` → full attribute history per store with `dbt_valid_from` / `dbt_valid_to` effective dating
+- `snap_item` → full attribute history per item with `dbt_valid_from` / `dbt_valid_to` effective dating
+
+**Use the current-state dimension when:**
+- joining to facts for standard reporting
+- you need a single current label per entity
+
+**Use the snapshot directly when:**
+- you need to know what attributes were true on a specific date
+- you are analyzing trends in entity attributes over time
+- you are auditing how a store or item was classified historically
+
+Example: to join a fact row to the store attributes that were true *at the time of the transaction*:
+```sql
+select
+    f.invoice_item_number,
+    f.order_date,
+    f.sale_dollars,
+    s.store_name,
+    s.chain
+from fct_liquor_sales f
+left join snap_store s
+    on f.store_number = s.store_number
+   and f.order_date >= s.dbt_valid_from
+   and (f.order_date < s.dbt_valid_to or s.dbt_valid_to is null)
 ```
