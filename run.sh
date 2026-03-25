@@ -101,18 +101,79 @@ case "$COMMAND" in
         ;;
 
     pipeline)
+        # Optional args for ingestion window
+        PIPELINE_SOURCE="iowa_liquor"
+        PIPELINE_START_DATE=""
+        PIPELINE_END_DATE=""
+        PIPELINE_BATCH_SIZE=""
+        PIPELINE_MAX_BATCHES=""
+
+        # Parse args passed after "pipeline"
+        shift
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --source)
+                    PIPELINE_SOURCE="${2:-}"
+                    shift 2
+                    ;;
+                --start-date)
+                    PIPELINE_START_DATE="${2:-}"
+                    shift 2
+                    ;;
+                --end-date)
+                    PIPELINE_END_DATE="${2:-}"
+                    shift 2
+                    ;;
+                --batch-size)
+                    PIPELINE_BATCH_SIZE="${2:-}"
+                    shift 2
+                    ;;
+                --max-batches)
+                    PIPELINE_MAX_BATCHES="${2:-}"
+                    shift 2
+                    ;;
+                *)
+                    echo "[run] Unknown pipeline argument: $1"
+                    echo "[run] Usage: ./run.sh pipeline [--source <name>] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--batch-size N] [--max-batches N]"
+                    exit 2
+                    ;;
+            esac
+        done
+
         echo "[run] Running full pipeline: ingest -> snapshot -> transform -> test"
-        "$0" ingest
+
+        echo "[run] Running ingestion step"
+        INGEST_CMD=("$PROJECT_PYTHON" -m ingestion.run_ingestion --source "$PIPELINE_SOURCE")
+
+        if [[ -n "$PIPELINE_START_DATE" ]]; then
+            INGEST_CMD+=(--start-date "$PIPELINE_START_DATE")
+        fi
+        if [[ -n "$PIPELINE_END_DATE" ]]; then
+            INGEST_CMD+=(--end-date "$PIPELINE_END_DATE")
+        fi
+        if [[ -n "$PIPELINE_BATCH_SIZE" ]]; then
+            INGEST_CMD+=(--batch-size "$PIPELINE_BATCH_SIZE")
+        fi
+        if [[ -n "$PIPELINE_MAX_BATCHES" ]]; then
+            INGEST_CMD+=(--max-batches "$PIPELINE_MAX_BATCHES")
+        fi
+
+        "${INGEST_CMD[@]}"
+
         echo "[run] Running snapshots"
         "$PROJECT_DBT" snapshot
-        "$0" transform
-        "$0" test
+
+        echo "[run] Running dbt models (transform)"
+        "$PROJECT_DBT" run
+
+        echo "[run] Running dbt tests"
+        "$PROJECT_DBT" test
         ;;
 
-    *)
-        echo "Unknown command: $COMMAND"
-        echo "Run './run.sh help' to see available commands."
-        exit 1
-        ;;
+        *)
+            echo "Unknown command: $COMMAND"
+            echo "Run './run.sh help' to see available commands."
+            exit 1
+            ;;
 
 esac
