@@ -2,33 +2,37 @@ version: 2
 
 models:
   - name: dim_store
-    description: "Store dimension table with store-level attributes"
+    description: "Current-state Type 1 store dimension (one row per store_number), derived from snap_store."
     columns:
       - name: store_number
-        description: "Unique identifier for a store"
+        description: "{{ doc('store_number') }}"
         tests:
           - not_null
           - unique
 
   - name: dim_item
-    description: "Item dimension table with product-level attributes"
+    description: "Current-state Type 1 item dimension (one row per item_number), derived from snap_item."
     columns:
       - name: item_number
-        description: "Unique identifier for an item"
+        description: "{{ doc('item_number') }}"
         tests:
           - not_null
           - unique
 
   - name: fct_liquor_sales
-    description: "Fact table at invoice line-item grain for liquor sales"
+    description: "Atomic fact table at invoice line grain (one row per invoice_item_number)."
     columns:
       - name: invoice_item_number
-        description: "Unique identifier for each invoice line item"
+        description: "{{ doc('invoice_item_number') }}"
         tests:
           - not_null
           - unique
 
+      - name: order_date
+        description: "{{ doc('order_date') }}"
+
       - name: store_number
+        description: "{{ doc('store_number') }}"
         tests:
           - not_null
           - relationships:
@@ -37,9 +41,19 @@ models:
                 field: store_number
 
       - name: item_number
+        description: "{{ doc('item_number') }}"
         tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_item')
                 field: item_number
+
+      - name: sale_dollars
+        description: "{{ doc('sale_dollars') }}"
+
+      - name: bottles_sold
+        description: "{{ doc('bottles_sold') }}"
+
+      - name: loaded_at
+        description: "{{ doc('loaded_at') }}"
