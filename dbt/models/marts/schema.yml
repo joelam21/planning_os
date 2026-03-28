@@ -57,3 +57,34 @@ models:
 
       - name: loaded_at
         description: "{{ doc('loaded_at') }}"
+
+  - name: fct_sku_velocity
+    description: "Trailing-12-week SKU Pareto classification model."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+      - name: sku_tier
+        description: "Pareto tier based on cumulative unit contribution."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "Tier 1: Core (Top 80% Volume)"
+                  - "Tier 2: Niche (Next 15% Volume)"
+                  - "Tier 3: Zombie (Bottom 5% Volume)"
+      - name: cumulative_pct
+        description: "Running cumulative share of units."
+        tests:
+          - not_null
+      - name: unit_share_pct
+        description: "Item share of total trailing-12-week units."
+        tests:
+          - not_null
+      - name: revenue_share_pct
+        description: "Item share of total trailing-12-week revenue."
+        tests:
+          - not_null
