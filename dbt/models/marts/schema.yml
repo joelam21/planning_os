@@ -98,3 +98,42 @@ models:
         description: "Running cumulative share of revenue."
         tests:
           - not_null
+
+  - name: fct_replenishment_forecast
+    description: "Weekly baseline shipping forecast per active SKU using trailing 4-week and 8-week depletion averages."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_item')
+                field: item_number
+
+      - name: item_description
+        description: "Current item description from dim_item."
+
+      - name: category_name
+        description: "Current item category name from dim_item."
+
+      - name: trailing_4wk_avg_units
+        description: "Average weekly units sold across the most recent 4 full weeks."
+        tests:
+          - not_null
+
+      - name: trailing_8wk_avg_units
+        description: "Average weekly units sold across the most recent 8 full weeks."
+        tests:
+          - not_null
+
+      - name: selected_baseline_units
+        description: "Greater of trailing_4wk_avg_units and trailing_8wk_avg_units."
+        tests:
+          - not_null
+
+      - name: recommended_ship_qty
+        description: "Rounded baseline forecast with 20% safety buffer applied."
+        tests:
+          - not_null
