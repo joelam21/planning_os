@@ -2,38 +2,33 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
 
 # Local env
 .env
 
-# OS
-.DS_Store
-
-git_setup.sh
-
-logs/
-*.log
-AGENTS.md
-
-commands_cheatsheet.sh
-
-# dbt artifacts
-target/
-dbt_packages/
-
-# Python
-__pycache__/
-*.pyc
-
-# Environment
-.env
-.venv/
-
 # OS / editor
 .DS_Store
 .vscode/
+
+# Local-only scripts
+git_setup.sh
+commands_cheatsheet.sh
+
+# Logs
+logs/
+*.log
+
+# dbt generated artifacts
+target/
+dbt_packages/
 dbt_internal_packages/
 
-# exploratoinn notebooks
+# Agent config
+AGENTS.md
+
+# Local-only notebooks
 notebooks/query_exploration_notebook.ipynb
+.ipynb_checkpoints/
 
