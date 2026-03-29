@@ -29,6 +29,10 @@ ranked_items as (
             order by t.total_units_sold desc, t.item_number
             rows between unbounded preceding and current row
         ) as cumulative_units,
+        sum(t.total_revenue) over (
+            order by t.total_revenue desc, t.item_number
+            rows between unbounded preceding and current row
+        ) as cumulative_revenue,
         s.state_total_units,
         s.state_total_revenue,
         s.active_sku_count
@@ -47,16 +51,22 @@ item_classification as (
         r.state_total_units,
         r.state_total_revenue,
         r.active_sku_count,
-        (r.cumulative_units / nullif(r.state_total_units, 0))::float as cumulative_pct,
-        (r.total_units_sold / nullif(r.state_total_units, 0))::float as unit_share_pct,
-        (r.total_revenue / nullif(r.state_total_revenue, 0))::float as revenue_share_pct,
+        (r.cumulative_units / nullif(r.state_total_units, 0))::float as cumulative_volume_pct,
+        (r.cumulative_revenue / nullif(r.state_total_revenue, 0))::float as cumulative_revenue_pct,
         case
             when (r.cumulative_units / nullif(r.state_total_units, 0)) <= 0.80
                 then 'Tier 1: Core (Top 80% Volume)'
             when (r.cumulative_units / nullif(r.state_total_units, 0)) <= 0.95
                 then 'Tier 2: Niche (Next 15% Volume)'
             else 'Tier 3: Zombie (Bottom 5% Volume)'
-        end as sku_tier
+        end as sku_tier_volume,
+        case
+            when (r.cumulative_revenue / nullif(r.state_total_revenue, 0)) <= 0.80
+                then 'Tier 1: Core (Top 80% Revenue)'
+            when (r.cumulative_revenue / nullif(r.state_total_revenue, 0)) <= 0.95
+                then 'Tier 2: Niche (Next 15% Revenue)'
+            else 'Tier 3: Zombie (Bottom 5% Revenue)'
+        end as sku_tier_revenue
     from ranked_items r
     left join {{ ref('dim_item') }} i
         on r.item_number = i.item_number
