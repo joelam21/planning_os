@@ -1,6 +1,5 @@
 select *
 from {{ ref('fct_sku_velocity') }}
 where
-    cumulative_pct < 0 or cumulative_pct > 1
-    or unit_share_pct < 0 or unit_share_pct > 1
-    or revenue_share_pct < 0 or revenue_share_pct > 1
+    cumulative_volume_pct < 0 or cumulative_volume_pct > 1
+    or cumulative_revenue_pct < 0 or cumulative_revenue_pct > 1
