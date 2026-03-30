@@ -33,7 +33,7 @@ with latest_item_attributes as (
         state_bottle_retail,
         row_number() over (
             partition by item_number
-            order by loaded_at desc
+            order by order_date desc nulls last, loaded_at desc
         ) as rn
     from {{ ref('int_iowa_liquor_sales') }}
     where item_number is not null
