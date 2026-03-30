@@ -32,3 +32,6 @@ AGENTS.md
 notebooks/query_exploration_notebook.ipynb
 .ipynb_checkpoints/
 
+# Local SQL sandbox (not tracked by dbt or git)
+scratch_sql/
+
