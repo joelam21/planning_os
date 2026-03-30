@@ -153,15 +153,19 @@ Completed:
 - atomic and aggregated fact models
 - Type 1 current-state dimensions backed by Type 2 snapshots
 - custom data quality tests (business rules, grain, reconciliation, completeness)
+- return-aware data quality policy for sales sign handling
+- anomalous returns monitoring model for rare positive RINV rows
+- SKU velocity hardening to exclude returns from trailing-window ranking logic
 - source freshness checks
 - pipeline health model
 - parameterized pipeline execution in `run.sh`
 - notebook exposures and centralized dbt column docs
 
 Near-term roadmap:
-- CI workflow for dbt parse/validation
-- scheduling hardening and alerting
-- continued documentation alignment and maintainability improvements
+- expand historical coverage through 2023 windows
+- operationalize weekly warning/anomaly monitoring checks
+- continue enrichment roadmap (chain category, SKU planning tiers)
+- scheduling hardening and alerting once backfill cadence is stable
 
 ---
 
