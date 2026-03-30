@@ -42,7 +42,7 @@ case "$COMMAND" in
         echo "  ./run.sh ingest        # Run ingestion step (project-local)"
         echo "  ./run.sh transform     # Run dbt models (dbt run)"
         echo "  ./run.sh test          # Run dbt tests (dbt test)"
-        echo "  ./run.sh pipeline      # ingest -> transform -> test"
+        echo "  ./run.sh pipeline      # ingest -> snapshot -> transform -> test"
         echo ""
         ;;
 
