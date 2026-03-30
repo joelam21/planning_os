@@ -9,6 +9,7 @@ with trailing_12_weeks as (
         -12,
         (select max(order_date) from {{ ref('fct_liquor_sales') }})
     )
+    and upper(invoice_item_number) not like 'RINV-%'
     group by item_number
 ),
 
