@@ -24,9 +24,65 @@ Build a scalable analytics system that:
 
 ---
 
+## Flagship Use Case: SKU Rationalization and Replenishment Planning
+
+This project’s strongest business use case is SKU rationalization: identifying which products drive the majority of statewide volume and revenue, and which products add operational complexity with limited commercial return.
+
+### Business question
+
+If a retailer or distributor had to simplify the active catalog, which SKUs should be protected as core assortment, which should be reviewed, and which likely belong in the long tail?
+
+### Analytical approach
+
+I built a dbt mart that classifies each SKU using a trailing 12-week Pareto analysis across two dimensions:
+- volume contribution
+- revenue contribution
+
+This separates products that are operationally important from products that are financially important, instead of collapsing both questions into a single rank.
+
+Supporting models then extend that analysis into planning workflows:
+- SKU velocity segmentation for assortment and catalog productivity decisions
+- replenishment baseline forecasting for weekly shipment recommendations
+
+### What the model enables
+
+- Identifies the small set of SKUs responsible for the majority of statewide movement
+- Quantifies the long tail of low-productivity items that consume shelf space and working capital
+- Distinguishes between items that are high-volume, high-revenue, or both
+- Creates a bridge from descriptive analytics into operational decision support
+
+### Business takeaway
+
+The catalog follows a classic Pareto pattern: a relatively small share of SKUs drives a disproportionate share of sales, while a long tail of products contributes little volume or revenue.
+
+That makes SKU rationalization a credible operating lever:
+- protect core items that anchor demand
+- review marginal SKUs that add assortment complexity without meaningful payoff
+- use recent depletion patterns to size replenishment more intentionally
+
+### Portfolio value
+
+This use case demonstrates more than dashboarding. It shows an end-to-end workflow:
+- ingest external data
+- model atomic and aggregated facts in Snowflake with dbt
+- apply data tests and historical snapshots
+- translate warehouse models into a planning recommendation
+
+The analysis artifact for this use case lives in `notebooks/02_sku_velocity_analysis.ipynb`, backed by the `fct_sku_velocity` and `fct_replenishment_forecast` marts in dbt.
+
+## Early Findings
+
+- The market shows a classic long-tail catalog pattern: a small share of SKUs drives a disproportionate share of statewide volume and revenue.
+- Store performance is heterogeneous across retail formats, with different operating models showing materially different revenue productivity.
+- Independent stores remain commercially meaningful as a group even when large chains dominate individual rankings.
+- Because the dataset reflects wholesale sell-in rather than consumer sell-through, weekly aggregation is more reliable than daily demand-style interpretation.
+- Negative sales and bottle values observed in late July 2022 were validated as return invoices (RINV-), not transformation errors.
+
+---
+
 ## Architecture
 
-```
+```text
 API → Python Ingestion → Snowflake (RAW)
      → dbt (staging → intermediate → marts)
      → Analysis (Jupyter / BI)
@@ -49,6 +105,8 @@ API → Python Ingestion → Snowflake (RAW)
 ### Fact Tables
 - `fct_liquor_sales` → atomic grain (invoice line)
 - `fct_store_daily_sales` → aggregated grain (store × day)
+- `fct_sku_velocity` → trailing-12-week SKU Pareto classification across volume and revenue
+- `fct_replenishment_forecast` → baseline weekly replenishment recommendation using recent depletion trends
 
 ### Dimension Tables
 - `dim_store` → Type 1 (current-state), derived from `snap_store`
@@ -60,16 +118,6 @@ API → Python Ingestion → Snowflake (RAW)
 
 ---
 
-## Key Insights (So Far)
-
-- Market shows a hybrid structure:
-  - dominant chains
-  - fragmented long tail
-- Independent stores collectively represent significant volume
-- Per-store performance varies by retail model (warehouse vs grocery vs convenience)
-- Dataset reflects **sell-in (store purchases)**, not POS consumer demand
-
----
 
 ## Important Data Context
 
@@ -80,15 +128,22 @@ Implications:
 - Missing or low-volume days are expected
 - Weekly or monthly aggregation is more appropriate for analysis
 
+Returns handling:
+- Source data includes legitimate return invoices, identified by invoice_item_number starting with RINV-
+- Return rows are expected to carry negative bottles, sales, and volume metrics
+- Data quality tests enforce that negative values are only allowed on return invoices and that return signs are internally consistent
+
 ---
 
 ## Current State
 
-- Ingestion pipeline working with parameterized runs
-- dbt models implemented and tested
-- Dimensional model established
-- Initial analysis notebook created
-- Data currently limited (partial historical coverage)
+- Parameterized ingestion pipeline running into Snowflake
+- dbt project with staging, intermediate, marts, tests, and snapshots
+- Current-state dimensions built from Type 2 historical snapshots
+- Store performance analysis completed
+- SKU rationalization mart completed
+- Replenishment forecast mart completed
+- Historical data coverage is still being expanded incrementally
 
 ---
 
@@ -112,11 +167,11 @@ source ./enter.sh
 
 ## Next Steps
 
-- Expand historical data coverage (month-by-month ingestion)
-- Harden automated scheduling and failure notifications
-- Add lightweight CI for dbt parse/validation checks
-- Evolve chain classification logic as data volume grows
-- Expand analysis with time series and product-mix segmentation
+- Expand historical coverage through full 2021 and 2022
+- Add formal dbt exposures for the SKU and replenishment notebooks
+- Strengthen README case-study framing with visual outputs from the notebooks
+- Add orchestration and alerting for scheduled pipeline runs
+- Continue extending planning-layer marts beyond descriptive reporting
 
 ---
 
@@ -133,11 +188,11 @@ A run is considered **healthy** when all of the following pass:
 | Check | Tool | Threshold | Failure type |
 |---|---|---|---|
 | Source freshness | `dbt source freshness` | loaded within 7 days | WARN > 7d / ERROR > 14d |
-| All schema tests | `dbt test` | PASS=N, WARN=0, ERROR=0 | ERROR blocks merge |
+| All schema tests | `dbt test` | ERROR=0; documented warn-only exceptions allowed | ERROR blocks merge |
 | Grain integrity | `assert_fct_store_daily_no_duplicate_store_day` | 0 rows returned | ERROR |
 | Reconciliation | `assert_fct_store_daily_matches_fact_aggregates` | 0 rows returned | ERROR |
 | Date coverage | `assert_no_dates_lost_in_staging` | 0 rows returned | ERROR |
-| Business rules | `assert_no_negative_*` | 0 rows returned | ERROR |
+| Business rules | `assert_negative_values_must_be_returns`, `assert_return_sign_consistency` | 0 rows returned | ERROR |
 | Pipeline health view | `MON_PIPELINE_HEALTH.freshness_status` | PASS | WARN/ERROR triggers manual review |
 
 ### Run sequence
@@ -194,3 +249,4 @@ left join snap_store s
    and f.order_date >= s.dbt_valid_from
    and (f.order_date < s.dbt_valid_to or s.dbt_valid_to is null)
 ```
+
