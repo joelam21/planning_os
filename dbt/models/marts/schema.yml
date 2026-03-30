@@ -19,6 +19,25 @@ models:
           - not_null
           - unique
 
+  - name: dim_item_business_history
+    description: "Business-effective item history built from int_iowa_liquor_sales using order_date change points."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+
+      - name: business_valid_from
+        description: "Business date when this attribute version first appears."
+        tests:
+          - not_null
+
+      - name: business_valid_to
+        description: "Business date when this version ends (day before next change); null means current."
+
+      - name: is_current
+        description: "True when business_valid_to is null."
+
   - name: fct_liquor_sales
     description: "Atomic fact table at invoice line grain (one row per invoice_item_number)."
     columns:

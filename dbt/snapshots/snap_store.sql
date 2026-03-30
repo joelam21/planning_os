@@ -62,7 +62,7 @@ with latest_store_attributes as (
         county,
         row_number() over (
             partition by store_number
-            order by loaded_at desc
+            order by order_date desc nulls last, loaded_at desc
         ) as rn
     from {{ ref('int_iowa_liquor_sales') }}
     where store_number is not null
