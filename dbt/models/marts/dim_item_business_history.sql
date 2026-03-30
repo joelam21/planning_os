@@ -108,18 +108,21 @@ with_valid_to as (
 )
 
 select
-    item_number,
-    item_description,
-    category,
-    category_name,
-    vendor_number,
-    vendor_name,
-    bottle_volume_ml,
-    pack,
-    state_bottle_cost,
-    state_bottle_retail,
-    business_valid_from,
-    business_valid_to,
-    case when business_valid_to is null then true else false end as is_current,
-    source_loaded_at
-from with_valid_to
+    h.item_number,
+    h.item_description,
+    h.category,
+    h.category_name,
+    coalesce(m.category_family, 'Other') as category_family,
+    h.vendor_number,
+    h.vendor_name,
+    h.bottle_volume_ml,
+    h.pack,
+    h.state_bottle_cost,
+    h.state_bottle_retail,
+    h.business_valid_from,
+    h.business_valid_to,
+    case when h.business_valid_to is null then true else false end as is_current,
+    h.source_loaded_at
+from with_valid_to h
+left join {{ ref('category_family_map') }} m
+    on h.category = m.category
