@@ -111,10 +111,11 @@ API → Python Ingestion → Snowflake (RAW)
 ### Dimension Tables
 - `dim_store` → Type 1 (current-state), derived from `snap_store`
 - `dim_item` → Type 1 (current-state), derived from `snap_item`
+- `dim_item_business_history` → Type 2 (SCD), item attribute history with business-effective valid_from/to dates and change-point detection
 
 ### Snapshots
-- `snap_store` → Type 2 (SCD), full store attribute history
-- `snap_item` → Type 2 (SCD), full item attribute history
+- `snap_store` → Type 2 (SCD), full store attribute history (system-time based)
+- `snap_item` → Type 2 (SCD), full item attribute history (system-time based)
 
 ---
 
