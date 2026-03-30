@@ -144,6 +144,9 @@ Returns handling:
 - Store performance analysis completed
 - SKU rationalization mart completed
 - Replenishment forecast mart completed
+- Return-aware quality policy implemented (`assert_negative_values_must_be_returns`)
+- Anomalous returns monitoring model implemented (`int_anomalous_returns`)
+- SKU velocity logic hardened by excluding RINV return rows from the trailing 12-week window
 - Historical data coverage is still being expanded incrementally
 
 ---
@@ -168,11 +171,11 @@ source ./enter.sh
 
 ## Next Steps
 
-- Expand historical coverage through full 2021 and 2022
-- Add formal dbt exposures for the SKU and replenishment notebooks
-- Strengthen README case-study framing with visual outputs from the notebooks
-- Add orchestration and alerting for scheduled pipeline runs
-- Continue extending planning-layer marts beyond descriptive reporting
+- Expand historical coverage through remaining 2023 windows
+- Run warning monitors weekly (`assert_retail_gte_cost` count + threshold checks)
+- Track anomalous return frequency and impact over time (`int_anomalous_returns`)
+- Continue value-add enrichment models (chain category, SKU tier strategy, planning marts)
+- Add orchestration and alerting after historical backfill stabilizes
 
 ---
 
