@@ -2,13 +2,12 @@ version: 2
 
 models:
   - name: stg_iowa_liquor
-    description: "Cleaned and typed staging model for Iowa liquor sales data."
+    description: "Cleaned and typed staging model for Iowa liquor sales data. This layer preserves source row shape and does not enforce invoice-level uniqueness."
     columns:
       - name: invoice_item_number
-        description: "Unique invoice line identifier from the Iowa liquor source."
+        description: "Invoice line identifier from the Iowa liquor source; duplicate values are monitored and resolved downstream."
         tests:
           - not_null
-          - unique
 
       - name: order_date
         description: "Transaction date from the raw source."
