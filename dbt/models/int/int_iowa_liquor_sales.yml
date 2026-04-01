@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: int_iowa_liquor_sales
+    description: "Typed intermediate model that preserves the source row shape, including upstream duplicate invoice line keys."
+
+  - name: int_iowa_liquor_sales_deduped
+    description: "Deduped intermediate model with one row per invoice_item_number, keeping the latest loaded_at version."
+    columns:
+      - name: invoice_item_number
+        description: "Invoice line identifier after dedupe policy is applied."
+        tests:
+          - not_null
+          - unique
+
+      - name: loaded_at
+        description: "Source load timestamp used as the primary dedupe ordering field."
+        tests:
+          - not_null
+
+  - name: int_iowa_liquor_sales_duplicate_audit
+    description: "Audit model listing duplicate invoice_item_number keys present in the upstream source-shaped intermediate model."
+    columns:
+      - name: invoice_item_number
+        description: "Duplicate invoice line identifier found upstream."
+      - name: duplicate_row_count
+        description: "Number of source-shaped rows observed for the duplicate key."

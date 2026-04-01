@@ -24,8 +24,7 @@ select
 
     loaded_at
 
-from {{ ref('int_iowa_liquor_sales') }}
-
+from {{ ref('int_iowa_liquor_sales_deduped') }}
 {% if is_incremental() %}
     where loaded_at >= (
         select dateadd('day', -3, max(loaded_at))

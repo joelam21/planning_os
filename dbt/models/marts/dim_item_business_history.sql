@@ -19,7 +19,7 @@ with daily_item_attributes as (
             partition by item_number, order_date
             order by loaded_at desc
         ) as rn
-    from {{ ref('int_iowa_liquor_sales') }}
+    from {{ ref('int_iowa_liquor_sales_deduped') }}
     where item_number is not null
       and order_date is not null
 ),
