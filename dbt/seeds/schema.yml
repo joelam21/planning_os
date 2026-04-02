@@ -1,0 +1,34 @@
+version: 2
+
+seeds:
+  - name: category_family_map
+    description: "Canonical mapping from item category code/name to broad category_family for reporting."
+    columns:
+      - name: category
+        description: "Raw item category code from source taxonomy."
+        tests:
+          - not_null
+          - unique
+
+      - name: category_name
+        description: "Raw item category name from source taxonomy."
+        tests:
+          - not_null
+
+      - name: category_family
+        description: "Broad family bucket used for rollups and category-level analytics."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Whiskies
+                  - Tequilas
+                  - Vodkas
+                  - Brandies
+                  - Rum
+                  - Gin
+                  - Liqueurs
+                  - RTD/Cocktails
+                  - Specialty/Other Spirits
+                  - Other

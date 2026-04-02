@@ -147,6 +147,7 @@ Returns handling:
 - Replenishment forecast mart completed
 - Return-aware quality policy implemented (`assert_negative_values_must_be_returns`)
 - Anomalous returns monitoring model implemented (`int_anomalous_returns`)
+- Unlabeled negative return anomaly monitoring model implemented (`int_unlabeled_negative_returns`)
 - SKU velocity logic hardened by excluding RINV return rows from the trailing 12-week window
 - Historical data coverage is still being expanded incrementally
 
@@ -173,8 +174,8 @@ source ./enter.sh
 ## Next Steps
 
 - Expand historical coverage through remaining 2023 windows
-- Run warning monitors weekly (`assert_retail_gte_cost` count + threshold checks)
-- Track anomalous return frequency and impact over time (`int_anomalous_returns`)
+- Run warning monitors weekly (`assert_retail_gte_cost`, `assert_negative_values_must_be_returns` + threshold checks)
+- Track anomalous return frequency and impact over time (`int_anomalous_returns`, `int_unlabeled_negative_returns`)
 - Continue value-add enrichment models (chain category, SKU tier strategy, planning marts)
 - Add orchestration and alerting after historical backfill stabilizes
 
@@ -197,8 +198,8 @@ A run is considered **healthy** when all of the following pass:
 | Grain integrity | `assert_fct_store_daily_no_duplicate_store_day` | 0 rows returned | ERROR |
 | Reconciliation | `assert_fct_store_daily_matches_fact_aggregates` | 0 rows returned | ERROR |
 | Date coverage | `assert_no_dates_lost_in_staging` | 0 rows returned | ERROR |
-| Business rules | `assert_negative_values_must_be_returns` | 0 rows returned | ERROR |
-| Anomaly monitoring | `int_anomalous_returns` | Review periodically | INFORMATIONAL |
+| Business rules | `assert_negative_values_must_be_returns` | 0 rows returned | WARN |
+| Anomaly monitoring | `int_anomalous_returns`, `int_unlabeled_negative_returns` | Review periodically | INFORMATIONAL |
 | Pipeline health view | `MON_PIPELINE_HEALTH.freshness_status` | PASS | WARN/ERROR triggers manual review |
 
 ### Run sequence

@@ -19,6 +19,24 @@ models:
           - not_null
           - unique
 
+      - name: category_family
+        description: "Broad category family mapped from category/category_name (for example Whiskies, Vodkas, Tequilas)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Whiskies
+                  - Tequilas
+                  - Vodkas
+                  - Brandies
+                  - Rum
+                  - Gin
+                  - Liqueurs
+                  - RTD/Cocktails
+                  - Specialty/Other Spirits
+                  - Other
+
   - name: dim_item_business_history
     description: "Business-effective item history built from int_iowa_liquor_sales using order_date change points."
     columns:
@@ -26,6 +44,24 @@ models:
         description: "{{ doc('item_number') }}"
         tests:
           - not_null
+
+      - name: category_family
+        description: "Broad category family mapped from category/category_name for historical versions."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Whiskies
+                  - Tequilas
+                  - Vodkas
+                  - Brandies
+                  - Rum
+                  - Gin
+                  - Liqueurs
+                  - RTD/Cocktails
+                  - Specialty/Other Spirits
+                  - Other
 
       - name: business_valid_from
         description: "Business date when this attribute version first appears."

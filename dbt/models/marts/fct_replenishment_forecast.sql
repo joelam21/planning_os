@@ -16,6 +16,7 @@ date_trunc('week', order_date) as week_start,
 item_number,
 sum(bottles_sold) as weekly_units_sold
 from {{ ref('fct_liquor_sales') }}
+where upper(invoice_item_number) not like 'RINV-%'
 group by 1, 2
 ),
 
@@ -72,8 +73,8 @@ select
 r.item_number,
 r.trailing_4wk_avg_units,
 r.trailing_8wk_avg_units,
-greatest(r.trailing_4wk_avg_units, r.trailing_8wk_avg_units) as selected_baseline_units,
-round(greatest(r.trailing_4wk_avg_units, r.trailing_8wk_avg_units) * 1.2, 0) as recommended_ship_qty
+greatest(0, r.trailing_4wk_avg_units, r.trailing_8wk_avg_units) as selected_baseline_units,
+round(greatest(0, r.trailing_4wk_avg_units, r.trailing_8wk_avg_units) * 1.2, 0) as recommended_ship_qty
 from rolling_metrics r
 )
 

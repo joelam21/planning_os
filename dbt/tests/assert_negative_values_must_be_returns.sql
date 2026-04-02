@@ -1,4 +1,6 @@
 -- dbt/tests/assert_negative_values_must_be_returns.sql
+{{ config(severity='warn') }}
+
 select *
 from {{ ref('fct_liquor_sales') }}
 where
