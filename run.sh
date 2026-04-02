@@ -15,6 +15,7 @@ PROJECT_SNOW="$EXPECTED_VENV/bin/snow"
 PROJECT_DBT="$EXPECTED_VENV/bin/dbt"
 
 COMMAND="${1:-help}"
+PIPELINE_INSERTED_ROWS=""
 
 require_project_venv() {
     if [ "${VIRTUAL_ENV:-}" != "$EXPECTED_VENV" ]; then
@@ -23,6 +24,34 @@ require_project_venv() {
         echo "[run] Current:  ${VIRTUAL_ENV:-<none>}"
         echo "[run] Run: source ./enter.sh"
         exit 1
+    fi
+}
+
+print_pipeline_success() {
+    echo "[run] PIPELINE SUCCEEDED"
+    if [ -n "${PIPELINE_INSERTED_ROWS:-}" ]; then
+        echo "[run] Records loaded: ${PIPELINE_INSERTED_ROWS}"
+    fi
+}
+
+print_pipeline_failure() {
+    local failed_step="$1"
+    local exit_code="$2"
+    echo "[run] PIPELINE FAILED during: ${failed_step}"
+    if [ -n "${PIPELINE_INSERTED_ROWS:-}" ]; then
+        echo "[run] Records loaded before failure: ${PIPELINE_INSERTED_ROWS}"
+    fi
+    return "$exit_code"
+}
+
+run_pipeline_command() {
+    local step_name="$1"
+    shift
+    "$@"
+    local exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        print_pipeline_failure "$step_name" "$exit_code"
+        exit "$exit_code"
     fi
 }
 
@@ -158,16 +187,24 @@ case "$COMMAND" in
             INGEST_CMD+=(--max-batches "$PIPELINE_MAX_BATCHES")
         fi
 
-        "${INGEST_CMD[@]}"
+        INGEST_OUTPUT="$("${INGEST_CMD[@]}" 2>&1)" || {
+            exit_code=$?
+            printf '%s\n' "$INGEST_OUTPUT"
+            print_pipeline_failure "ingestion" "$exit_code"
+            exit "$exit_code"
+        }
+        printf '%s\n' "$INGEST_OUTPUT"
+        PIPELINE_INSERTED_ROWS="$(printf '%s\n' "$INGEST_OUTPUT" | sed -n 's/.*Inserted \([0-9][0-9]*\) rows.*/\1/p' | tail -n 1)"
 
         echo "[run] Running snapshots"
-        "$PROJECT_DBT" snapshot
+        run_pipeline_command "snapshots" "$PROJECT_DBT" snapshot
 
         echo "[run] Running dbt models (transform)"
-        "$PROJECT_DBT" run
+        run_pipeline_command "transform" "$PROJECT_DBT" run
 
         echo "[run] Running dbt tests"
-        "$PROJECT_DBT" test
+        run_pipeline_command "test" "$PROJECT_DBT" test
+        print_pipeline_success
         ;;
 
         *)
