@@ -38,7 +38,7 @@ models:
                   - Other
 
   - name: dim_item_business_history
-    description: "Business-effective item history built from int_iowa_liquor_sales using order_date change points."
+    description: "Business-effective item history with historical pricing and strategy labels, built from the intermediate order-date history model."
     columns:
       - name: item_number
         description: "{{ doc('item_number') }}"
@@ -73,6 +73,83 @@ models:
 
       - name: is_current
         description: "True when business_valid_to is null."
+
+      - name: price_per_100ml
+        description: "Historical retail price normalized to 100ml for cross-size comparison."
+
+      - name: effective_bottle_volume_ml
+        description: "Bottle volume used for price normalization; 700ml formats are normalized to 750ml."
+
+      - name: is_bundle_pack
+        description: "True when item_description suggests a multipack, tray pack, gift set, sampler, or similar bundle."
+        tests:
+          - not_null
+
+      - name: package_size_tier
+        description: "Analyst-facing package size class based on bottle volume."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - unknown
+                  - micro_trial
+                  - mini_trial
+                  - large_trial
+                  - half_size
+                  - standard
+                  - jumbo_value
+
+      - name: retail_price_tier
+        description: "Historical bottle-retail price band used for broad price positioning."
+        tests:
+          - not_null
+
+      - name: price_per_100ml_tier
+        description: "Historical normalized price band based on price_per_100ml."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - unknown
+                  - bundle_unknown
+                  - 0_to_2
+                  - 2_to_4
+                  - 4_to_6
+                  - 6_to_8
+                  - 8_to_12
+                  - 12_to_20
+                  - 20_plus
+
+      - name: normalized_price_tier
+        description: "Analyst-friendly alias for price_per_100ml_tier."
+        tests:
+          - not_null
+
+      - name: price_position_segment
+        description: "Analyst-facing strategic price segment derived from bottle price and normalized price."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - unknown
+                  - bundle_pack
+                  - trial_value
+                  - trial_premium
+                  - trial_luxury
+                  - high_volume
+                  - budget
+                  - standard
+                  - other
+                  - premium
+                  - premium_bulk
+                  - super_premium
+                  - ultra_premium
+                  - luxury
+                  - icon_collectible
+                  - value_oversized
 
   - name: fct_liquor_sales
     description: "Atomic fact table at invoice line grain (one row per invoice_item_number)."

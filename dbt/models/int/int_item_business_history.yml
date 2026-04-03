@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: int_item_business_history
+    description: "Intermediate business-effective item history built from order_date change points. Owns historical version construction before mart-level business labeling."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+
+      - name: business_valid_from
+        description: "Business date when this attribute version first appears."
+        tests:
+          - not_null
+
+      - name: business_valid_to
+        description: "Business date when this version ends (day before next change); null means current."
+
+      - name: is_current
+        description: "True when business_valid_to is null."

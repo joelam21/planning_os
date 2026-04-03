@@ -1,128 +1,123 @@
--- Business-effective item history built from transactional business dates.
--- This captures attribute change points over order_date (not snapshot run time).
+-- Analyst-facing business-effective item history.
+-- This layers strategy-friendly pricing dimensions on top of the intermediate history builder.
 
-with daily_item_attributes as (
+with base as (
     select
-        item_number,
-        item_description,
-        category,
-        category_name,
-        vendor_number,
-        vendor_name,
-        bottle_volume_ml,
-        pack,
-        state_bottle_cost,
-        state_bottle_retail,
-        order_date,
-        loaded_at,
-        row_number() over (
-            partition by item_number, order_date
-            order by loaded_at desc
-        ) as rn
-    from {{ ref('int_iowa_liquor_sales_deduped') }}
-    where item_number is not null
-      and order_date is not null
+        h.item_number,
+        h.item_description,
+        h.category,
+        h.category_name,
+        coalesce(m.category_family, 'Other') as category_family,
+        h.vendor_number,
+        h.vendor_name,
+        h.bottle_volume_ml,
+        h.pack,
+        h.state_bottle_cost,
+        h.state_bottle_retail,
+        h.business_valid_from,
+        h.business_valid_to,
+        h.is_current,
+        h.source_loaded_at
+    from {{ ref('int_item_business_history') }} h
+    left join {{ ref('category_family_map') }} m
+        on h.category = m.category
 ),
 
-daily_latest as (
-    select
-        item_number,
-        item_description,
-        category,
-        category_name,
-        vendor_number,
-        vendor_name,
-        bottle_volume_ml,
-        pack,
-        state_bottle_cost,
-        state_bottle_retail,
-        order_date,
-        loaded_at
-    from daily_item_attributes
-    where rn = 1
-),
-
-with_change_flags as (
+with_size as (
     select
         *,
-        lag(item_description) over (partition by item_number order by order_date, loaded_at) as prev_item_description,
-        lag(category) over (partition by item_number order by order_date, loaded_at) as prev_category,
-        lag(category_name) over (partition by item_number order by order_date, loaded_at) as prev_category_name,
-        lag(vendor_number) over (partition by item_number order by order_date, loaded_at) as prev_vendor_number,
-        lag(vendor_name) over (partition by item_number order by order_date, loaded_at) as prev_vendor_name,
-        lag(bottle_volume_ml) over (partition by item_number order by order_date, loaded_at) as prev_bottle_volume_ml,
-        lag(pack) over (partition by item_number order by order_date, loaded_at) as prev_pack,
-        lag(state_bottle_cost) over (partition by item_number order by order_date, loaded_at) as prev_state_bottle_cost,
-        lag(state_bottle_retail) over (partition by item_number order by order_date, loaded_at) as prev_state_bottle_retail
-    from daily_latest
+        case
+            when coalesce(item_description, '') ilike any (
+                '%TRI PACK%',
+                '%TRIPACK%',
+                '%TRAY PACK%',
+                '%GIFT PACK%',
+                '%GIFT SET%',
+                '%SAMPLER%',
+                '%VARIETY PACK%',
+                '%COMBO PACK%'
+            ) then true
+            when regexp_like(
+                upper(coalesce(item_description, '')),
+                '.*([0-9]+[ -]?PACK|[0-9]+PK).*'
+            ) then true
+            else false
+        end as is_bundle_pack,
+        case
+            when bottle_volume_ml is null or bottle_volume_ml <= 0 then null
+            when bottle_volume_ml between 680 and 720 then 750
+            else bottle_volume_ml
+        end as effective_bottle_volume_ml,
+        case
+            when bottle_volume_ml is null or bottle_volume_ml <= 0 then 'unknown'
+            when bottle_volume_ml <= 50 then 'micro_trial'
+            when bottle_volume_ml <= 100 then 'mini_trial'
+            when bottle_volume_ml <= 200 then 'large_trial'
+            when bottle_volume_ml <= 500 then 'half_size'
+            when bottle_volume_ml <= 800 then 'standard'
+            else 'jumbo_value'
+        end as package_size_tier
+    from base
 ),
 
-change_points as (
+with_pricing as (
     select
-        item_number,
-        item_description,
-        category,
-        category_name,
-        vendor_number,
-        vendor_name,
-        bottle_volume_ml,
-        pack,
-        state_bottle_cost,
-        state_bottle_retail,
-        order_date as business_valid_from,
-        loaded_at as source_loaded_at
-    from with_change_flags
-    where
-        prev_item_description is null
-        or coalesce(item_description, '') <> coalesce(prev_item_description, '')
-        or coalesce(category, '') <> coalesce(prev_category, '')
-        or coalesce(category_name, '') <> coalesce(prev_category_name, '')
-        or coalesce(vendor_number, '') <> coalesce(prev_vendor_number, '')
-        or coalesce(vendor_name, '') <> coalesce(prev_vendor_name, '')
-        or coalesce(bottle_volume_ml, -1) <> coalesce(prev_bottle_volume_ml, -1)
-        or coalesce(pack, -1) <> coalesce(prev_pack, -1)
-        or coalesce(state_bottle_cost, -1) <> coalesce(prev_state_bottle_cost, -1)
-        or coalesce(state_bottle_retail, -1) <> coalesce(prev_state_bottle_retail, -1)
-),
-
-with_valid_to as (
-    select
-        item_number,
-        item_description,
-        category,
-        category_name,
-        vendor_number,
-        vendor_name,
-        bottle_volume_ml,
-        pack,
-        state_bottle_cost,
-        state_bottle_retail,
-        business_valid_from,
-        dateadd(
-            day,
-            -1,
-            lead(business_valid_from) over (partition by item_number order by business_valid_from)
-        ) as business_valid_to,
-        source_loaded_at
-    from change_points
+        *,
+        case
+            when is_bundle_pack then null
+            when state_bottle_retail is not null and effective_bottle_volume_ml > 0
+                then round((state_bottle_retail / effective_bottle_volume_ml) * 100, 2)
+            else null
+        end as price_per_100ml,
+        case
+            when state_bottle_retail is null then 'unknown'
+            when state_bottle_retail < 15 then '0_to_15'
+            when state_bottle_retail < 30 then '15_to_30'
+            when state_bottle_retail < 45 then '30_to_45'
+            when state_bottle_retail < 60 then '45_to_60'
+            when state_bottle_retail < 100 then '60_to_100'
+            when state_bottle_retail < 250 then '100_to_250'
+            when state_bottle_retail < 1000 then '250_to_1000'
+            else '1000_plus'
+        end as retail_price_tier,
+        case
+            when is_bundle_pack then 'bundle_unknown'
+            when effective_bottle_volume_ml is null or effective_bottle_volume_ml <= 0 or state_bottle_retail is null then 'unknown'
+            when (state_bottle_retail / effective_bottle_volume_ml) * 100 < 2 then '0_to_2'
+            when (state_bottle_retail / effective_bottle_volume_ml) * 100 < 4 then '2_to_4'
+            when (state_bottle_retail / effective_bottle_volume_ml) * 100 < 6 then '4_to_6'
+            when (state_bottle_retail / effective_bottle_volume_ml) * 100 < 8 then '6_to_8'
+            when (state_bottle_retail / effective_bottle_volume_ml) * 100 < 12 then '8_to_12'
+            when (state_bottle_retail / effective_bottle_volume_ml) * 100 < 20 then '12_to_20'
+            else '20_plus'
+        end as price_per_100ml_tier
+    from with_size
 )
 
 select
-    h.item_number,
-    h.item_description,
-    h.category,
-    h.category_name,
-    coalesce(m.category_family, 'Other') as category_family,
-    h.vendor_number,
-    h.vendor_name,
-    h.bottle_volume_ml,
-    h.pack,
-    h.state_bottle_cost,
-    h.state_bottle_retail,
-    h.business_valid_from,
-    h.business_valid_to,
-    case when h.business_valid_to is null then true else false end as is_current,
-    h.source_loaded_at
-from with_valid_to h
-left join {{ ref('category_family_map') }} m
-    on h.category = m.category
+    *,
+    price_per_100ml_tier as normalized_price_tier,
+    case
+        when retail_price_tier = 'unknown' or price_per_100ml_tier = 'unknown' or package_size_tier = 'unknown' then 'unknown'
+        when is_bundle_pack then 'bundle_pack'
+        when package_size_tier in ('micro_trial', 'mini_trial', 'large_trial')
+             and (state_bottle_retail >= 100 or price_per_100ml >= 20) then 'trial_luxury'
+        when package_size_tier in ('micro_trial', 'mini_trial', 'large_trial')
+             and (state_bottle_retail >= 30 or price_per_100ml >= 8) then 'trial_premium'
+        when package_size_tier in ('micro_trial', 'mini_trial', 'large_trial') then 'trial_value'
+        when package_size_tier in ('standard','half_size') and state_bottle_retail >= 1000 and price_per_100ml >= 20 then 'icon_collectible'
+        when package_size_tier in ('standard','half_size') and state_bottle_retail >= 250 and price_per_100ml >= 12 then 'luxury'
+        when package_size_tier in ('standard','half_size') and state_bottle_retail >= 100 and price_per_100ml >= 8 then 'ultra_premium'
+        when package_size_tier in ('standard','half_size') and state_bottle_retail >= 60 and price_per_100ml >= 6 then 'super_premium'
+        when package_size_tier = 'jumbo_value' and price_per_100ml < 4 then 'value_oversized'
+        when package_size_tier in ('standard') and state_bottle_retail >= 30 and price_per_100ml >= 4 then 'premium'
+        when package_size_tier in ('half_size') and state_bottle_retail >= 30 and price_per_100ml >= 2 then 'premium'
+        when package_size_tier in ('standard') and state_bottle_retail >= 15 and price_per_100ml >= 1.5 then 'standard'
+        when package_size_tier in ('half_size') and state_bottle_retail >= 15 and price_per_100ml >= 1 then 'standard'
+        when package_size_tier in ('standard') and state_bottle_retail <= 15 then 'budget'
+        when package_size_tier in ('half_size') and state_bottle_retail <= 15 then 'budget'
+        when package_size_tier in ('jumbo_value') and state_bottle_retail < 15 and price_per_100ml < 2 then 'high_volume'
+        when package_size_tier in ('jumbo_value') and state_bottle_retail >= 15 and price_per_100ml >= 2 then 'premium_bulk'
+        else 'other'
+    end as price_position_segment
+from with_pricing

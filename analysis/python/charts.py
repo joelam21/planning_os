@@ -25,6 +25,29 @@ def _annotate_vbar(ax, bar, annotation: str, max_h: float, inside_threshold: flo
         ax.text(x_mid, bar_h + outside_offset, annotation, ha="center", va="bottom", fontsize=9, color="black", fontweight="bold")
 
 
+def _literal_currency(text: str) -> str:
+    """Escape dollar signs so matplotlib doesn't treat them as mathtext delimiters."""
+    return text.replace("$", r"\$")
+
+
+PRICE_POSITION_SEGMENT_ORDER = [
+    "budget",
+    "budget_standard",
+    "high_volume",
+    "standard",
+    "premium",
+    "premium_plus",
+    "super_premium",
+    "ultra_premium",
+    "luxury",
+    "icon_collectible",
+    "bulk_or_bundle",
+    "trial_size",
+    "other",
+    "unknown",
+]
+
+
 def plot_family_growth(df_family: pd.DataFrame, month_start: str = "", trend_years: int = 3) -> None:
     """Horizontal bar chart of category family T12M sales with inside/outside annotations."""
     plot_df = df_family[df_family["category_family"] != "Grand Total"].copy()
@@ -377,6 +400,148 @@ def plot_vendor_stacked_category_chart(
     plt.show()
 
 
+def plot_vendor_stacked_price_segment_chart(
+    df_detail: pd.DataFrame,
+    category_family: str,
+    month_start: str = "",
+    top_n_vendors: int = 5,
+) -> None:
+    """Stacked vendor bar chart showing price-position mix within a category family."""
+    detail_rows = df_detail[df_detail["row_type"] == "detail"].copy()
+    grand_total_rows = df_detail[df_detail["row_type"] == "grand_total"].copy()
+
+    if len(detail_rows) == 0:
+        print("No vendor/price-segment detail rows returned for current filters.")
+        return
+
+    vendor_totals = (
+        detail_rows.groupby(["vendor_rank", "vendor_number", "vendor_name"], as_index=False)[["sales_t12m", "sales_prior_t12m", "units_t12m"]]
+        .sum()
+        .sort_values(["vendor_rank", "sales_t12m"], ascending=[True, False])
+        .reset_index(drop=True)
+    )
+    vendor_totals["avg_selling_price"] = vendor_totals["sales_t12m"] / vendor_totals["units_t12m"]
+    vendor_totals.loc[vendor_totals["units_t12m"] == 0, "avg_selling_price"] = pd.NA
+
+    top_vendor_keys = vendor_totals.head(top_n_vendors)[["vendor_rank", "vendor_number", "vendor_name"]]
+
+    top_detail_rows = detail_rows.merge(
+        top_vendor_keys,
+        on=["vendor_rank", "vendor_number", "vendor_name"],
+        how="inner",
+    ).copy()
+
+    rest_vendor_totals = vendor_totals.iloc[top_n_vendors:].copy()
+    if len(rest_vendor_totals) > 0:
+        rest_detail_rows = detail_rows.merge(
+            rest_vendor_totals[["vendor_rank", "vendor_number", "vendor_name"]],
+            on=["vendor_rank", "vendor_number", "vendor_name"],
+            how="inner",
+        )
+        other_detail_rows = (
+            rest_detail_rows.groupby("price_position_segment", as_index=False)[["sales_t12m", "sales_prior_t12m", "units_t12m"]]
+            .sum()
+            .assign(vendor_rank=top_n_vendors + 1, vendor_number="Other", vendor_name="Other Vendors")
+        )
+        plot_rows = pd.concat([top_detail_rows, other_detail_rows], ignore_index=True, sort=False)
+    else:
+        plot_rows = top_detail_rows.copy()
+
+    pivot_df = (
+        plot_rows.pivot_table(
+            index=["vendor_rank", "vendor_number", "vendor_name"],
+            columns="price_position_segment",
+            values="sales_t12m",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .sort_index()
+    )
+
+    ordered_columns = [segment for segment in PRICE_POSITION_SEGMENT_ORDER if segment in pivot_df.columns]
+    unordered_columns = [segment for segment in pivot_df.columns if segment not in ordered_columns]
+    pivot_df = pivot_df[ordered_columns + unordered_columns]
+
+    plot_vendor_totals = (
+        plot_rows.groupby(["vendor_rank", "vendor_number", "vendor_name"], as_index=False)[["sales_t12m", "units_t12m"]]
+        .sum()
+        .sort_values(["vendor_rank", "sales_t12m"], ascending=[True, False])
+    )
+    plot_vendor_totals["avg_selling_price"] = plot_vendor_totals["sales_t12m"] / plot_vendor_totals["units_t12m"]
+    plot_vendor_totals.loc[plot_vendor_totals["units_t12m"] == 0, "avg_selling_price"] = pd.NA
+    asp_lookup = plot_vendor_totals.set_index(["vendor_rank", "vendor_number", "vendor_name"])["avg_selling_price"]
+
+    vendor_labels = [
+        f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+        for _, vendor_number, vendor_name in pivot_df.index
+    ]
+
+    fig, ax = plt.subplots(figsize=(13, 7))
+    palette = plt.cm.tab20.colors
+    bottom = pd.Series([0.0] * len(pivot_df), index=pivot_df.index)
+
+    for i, segment_name in enumerate(pivot_df.columns):
+        values_k = pivot_df[segment_name] / 1000.0
+        ax.bar(
+            range(len(pivot_df)),
+            values_k,
+            bottom=bottom / 1000.0,
+            color=palette[i % len(palette)],
+            label=segment_name,
+        )
+        bottom += pivot_df[segment_name]
+
+    subtitle = f" — T12M from {_month_label(month_start)}" if month_start else ""
+    title_suffix = f"Top {top_n_vendors} + Other"
+    ax.set_title(f"Vendor Price Segment Mix ({title_suffix}) - {category_family}{subtitle}")
+    ax.set_xlabel("Vendor")
+    ax.set_ylabel("Sales T12M ($k)")
+    ax.set_xticks(range(len(pivot_df)))
+    ax.set_xticklabels(vendor_labels, rotation=0, ha="center", fontsize=8)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+    ax.legend(title="Price Position Segment", loc="upper center", bbox_to_anchor=(0.5, 0.92), ncol=min(4, max(1, len(pivot_df.columns))))
+
+    totals_k = bottom / 1000.0
+    max_h = totals_k.max()
+    ax.set_ylim(0, max_h * 1.24)
+    for idx, (index_key, total_k) in enumerate(zip(pivot_df.index, totals_k)):
+        avg_price = asp_lookup.get(index_key)
+        avg_price_label = "n/a" if pd.isna(avg_price) else f"${avg_price:,.2f}"
+        ax.text(
+            idx,
+            total_k + max(max_h * 0.015, 40),
+            _literal_currency(f"${total_k:,.0f}k\nASP {avg_price_label}"),
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+    if len(grand_total_rows) > 0:
+        gt = grand_total_rows.iloc[0]
+        gt_k = gt["sales_t12m"] / 1000.0
+        gt_yoy = gt.get("t12m_yoy_pct")
+        gt_yoy_label = "n/a" if pd.isna(gt_yoy) else f"{gt_yoy:+.1f}%"
+        gt_asp = gt.get("avg_selling_price")
+        gt_asp_label = "n/a" if pd.isna(gt_asp) else f"${gt_asp:,.2f}"
+        gt_text = _literal_currency(f"Family Total: ${gt_k:,.0f}k | {gt_yoy_label} | ASP {gt_asp_label}")
+        ax.text(
+            0.5,
+            0.96,
+            gt_text,
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=10,
+            fontweight="bold",
+            color="black",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="0.6", alpha=0.9),
+        )
+
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_vendor_share_donuts_3y(
     df_detail: pd.DataFrame,
     category_family: str,
@@ -586,6 +751,140 @@ def plot_vendor_share_donuts_3y(
         fig.subplots_adjust(left=0.12, right=0.88, wspace=0.18, bottom=0.18, top=0.82)
     else:
         fig.subplots_adjust(left=0.08, right=0.92, wspace=0.30, bottom=0.18, top=0.82)
+    plt.show()
+
+
+def plot_vendor_price_segment_compare(
+    df_detail: pd.DataFrame,
+    category_family: str,
+    month_start: str = "",
+    title_override: str | None = None,
+) -> None:
+    """Side-by-side earliest vs latest FY stacked vendor segment mix for top 3 current-year vendors + Other."""
+    if len(df_detail) == 0:
+        print("No vendor/price-segment comparison rows returned for current filters.")
+        return
+
+    period_frames = []
+    for period_order, period_df in df_detail.groupby("period_order"):
+        period_frames.append((period_order, period_df.copy()))
+    period_frames = sorted(period_frames, key=lambda x: x[0], reverse=True)
+
+    if len(period_frames) > 2:
+        period_frames = [period_frames[0], period_frames[-1]]
+
+    fig, axes = plt.subplots(1, len(period_frames), figsize=(14, 6), sharey=True)
+    if len(period_frames) == 1:
+        axes = [axes]
+
+    palette = plt.cm.tab20.colors
+    color_map = {
+        segment: palette[i % len(palette)]
+        for i, segment in enumerate(PRICE_POSITION_SEGMENT_ORDER)
+    }
+
+    all_totals = []
+    subplot_payloads = []
+    for _, period_df in period_frames:
+        pivot_df = (
+            period_df.pivot_table(
+                index=["vendor_rank", "vendor_number", "vendor_name"],
+                columns="price_position_segment",
+                values="sales_t12m",
+                aggfunc="sum",
+                fill_value=0,
+            )
+            .sort_index()
+        )
+        ordered_columns = [segment for segment in PRICE_POSITION_SEGMENT_ORDER if segment in pivot_df.columns]
+        unordered_columns = [segment for segment in pivot_df.columns if segment not in ordered_columns]
+        pivot_df = pivot_df[ordered_columns + unordered_columns]
+
+        vendor_totals = (
+            period_df.groupby(["vendor_rank", "vendor_number", "vendor_name"], as_index=False)[["sales_t12m", "units_t12m"]]
+            .sum()
+            .sort_values(["vendor_rank", "sales_t12m"], ascending=[True, False])
+        )
+        vendor_totals["avg_selling_price"] = vendor_totals["sales_t12m"] / vendor_totals["units_t12m"]
+        vendor_totals.loc[vendor_totals["units_t12m"] == 0, "avg_selling_price"] = pd.NA
+        asp_lookup = vendor_totals.set_index(["vendor_rank", "vendor_number", "vendor_name"])["avg_selling_price"]
+
+        totals = pivot_df.sum(axis=1)
+        all_totals.extend((totals / 1000.0).tolist())
+        subplot_payloads.append((period_df["period_year"].iloc[0], pivot_df, asp_lookup, totals))
+
+    max_h = max(all_totals) if all_totals else 0
+
+    for ax, (period_year, pivot_df, asp_lookup, totals) in zip(axes, subplot_payloads):
+        vendor_labels = [
+            f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+            for _, vendor_number, vendor_name in pivot_df.index
+        ]
+        bottom = pd.Series([0.0] * len(pivot_df), index=pivot_df.index)
+
+        for segment_name in pivot_df.columns:
+            values = pivot_df[segment_name]
+            values_k = values / 1000.0
+            bars = ax.bar(
+                range(len(pivot_df)),
+                values_k,
+                bottom=bottom / 1000.0,
+                color=color_map.get(segment_name, "#7f7f7f"),
+                label=segment_name,
+            )
+            for idx, (bar, value, total_value) in enumerate(zip(bars, values, totals)):
+                if value <= 0 or total_value <= 0:
+                    continue
+                pct = value / total_value * 100
+                if pct < 8:
+                    continue
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    (bottom.iloc[idx] + value / 2) / 1000.0,
+                    f"{pct:.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color="white",
+                    fontweight="bold",
+                )
+            bottom += values
+
+        totals_k = totals / 1000.0
+        for idx, (index_key, total_k) in enumerate(zip(pivot_df.index, totals_k)):
+            avg_price = asp_lookup.get(index_key)
+            avg_price_label = "n/a" if pd.isna(avg_price) else f"${avg_price:,.2f}"
+            ax.text(
+                idx,
+                total_k + max(max_h * 0.015, 40),
+                _literal_currency(f"${total_k:,.0f}k\nASP {avg_price_label}"),
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
+
+        ax.set_title(f"FY {period_year}")
+        ax.set_xlabel("Vendor")
+        ax.set_xticks(range(len(pivot_df)))
+        ax.set_xticklabels(vendor_labels, rotation=0, ha="center", fontsize=8)
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+        ax.set_ylim(0, max_h * 1.24)
+
+    axes[0].set_ylabel("Sales T12M ($k)")
+
+    handles = [
+        mpatches.Patch(color=color_map.get(segment, "#7f7f7f"), label=segment)
+        for segment in PRICE_POSITION_SEGMENT_ORDER
+        if any(segment in payload[1].columns for payload in subplot_payloads)
+    ]
+
+    subtitle = f" — T12M from {_month_label(month_start)}" if month_start else ""
+    chart_title = title_override or f"Vendor Price Segment Mix Comparison (Top 3 + Other) - {category_family}{subtitle}"
+    fig.suptitle(chart_title, fontsize=14, fontweight="bold", y=0.98)
+    fig.legend(handles=handles, title="Price Position Segment", loc="upper center", bbox_to_anchor=(0.5, 0.90), ncol=min(4, max(1, len(handles))))
+
+    plt.tight_layout(rect=[0, 0, 1, 0.86])
     plt.show()
 
 
