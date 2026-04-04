@@ -18,8 +18,8 @@ category_sales as (
              then f.sale_dollars else 0 end)          as sales_t12m,
     sum(case when f.order_date >= b.prior_t12m_start and f.order_date < b.prior_t12m_end
              then f.sale_dollars else 0 end)          as sales_prior_t12m
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join params  p
   cross join bounds  b

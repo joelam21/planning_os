@@ -32,10 +32,10 @@ base_filtered as (
     coalesce(s.chain, 'Unknown Chain') as chain,
     f.order_date,
     f.sale_dollars
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
-  join planning_os.dev.dim_store s
+  join {database}.{schema}.dim_store s
     on f.store_number = s.store_number
   cross join params p
   where d.category_name = p.category_name

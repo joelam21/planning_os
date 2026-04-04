@@ -12,8 +12,8 @@ base_sales as (
     coalesce(cast(d.vendor_number as varchar), 'Unknown Vendor Number') as vendor_number,
     coalesce(d.vendor_name, 'Unknown Vendor') as vendor_name,
     f.sale_dollars
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join params p
   where d.category_name = p.category_name

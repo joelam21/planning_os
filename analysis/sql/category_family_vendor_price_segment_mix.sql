@@ -25,8 +25,8 @@ base_filtered as (
     f.order_date,
     f.sale_dollars,
     f.bottles_sold
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item_business_history h
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item_business_history h
     on f.item_number = h.item_number
    and f.order_date >= h.business_valid_from
    and (h.business_valid_to is null or f.order_date <= h.business_valid_to)
@@ -37,36 +37,50 @@ base_filtered as (
       or h.package_size_tier = p.package_size_tier
     )
 ),
+vendor_names as (
+  select
+    vendor_number,
+    vendor_name
+  from (
+    select
+      vendor_number,
+      vendor_name,
+      row_number() over (partition by vendor_number order by count(*) desc, vendor_name) as rn
+    from base_filtered
+    group by 1, 2
+  )
+  where rn = 1
+),
 vendor_segment_sales as (
   select
     category_family,
     price_position_segment,
     vendor_number,
-    vendor_name,
     sum(case when order_date >= b.t12m_start and order_date < b.t12m_end then sale_dollars else 0 end) as sales_t12m,
     sum(case when order_date >= b.prior_t12m_start and order_date < b.prior_t12m_end then sale_dollars else 0 end) as sales_prior_t12m,
     sum(case when order_date >= b.t12m_start and order_date < b.t12m_end then bottles_sold else 0 end) as units_t12m
   from base_filtered
   cross join bounds b
-  group by 1, 2, 3, 4
+  group by 1, 2, 3
 ),
 vendor_totals as (
   select
-    vendor_number,
-    vendor_name,
-    sum(sales_t12m) as vendor_sales_t12m,
-    sum(units_t12m) as vendor_units_t12m,
+    vss.vendor_number,
+    vn.vendor_name,
+    sum(vss.sales_t12m) as vendor_sales_t12m,
+    sum(vss.units_t12m) as vendor_units_t12m,
     row_number() over (
-      order by sum(sales_t12m) desc, vendor_name, vendor_number
+      order by sum(vss.sales_t12m) desc, vn.vendor_name, vss.vendor_number
     ) as vendor_rank
-  from vendor_segment_sales
+  from vendor_segment_sales vss
+  join vendor_names vn on vss.vendor_number = vn.vendor_number
   group by 1, 2
 ),
 detail_rows as (
   select
     vss.price_position_segment,
     vss.vendor_number,
-    vss.vendor_name,
+    vt.vendor_name,
     vt.vendor_rank,
     vss.sales_t12m,
     vss.sales_prior_t12m,
@@ -82,7 +96,6 @@ detail_rows as (
   from vendor_segment_sales vss
   join vendor_totals vt
     on vss.vendor_number = vt.vendor_number
-   and vss.vendor_name = vt.vendor_name
 )
 select
   'detail' as row_type,

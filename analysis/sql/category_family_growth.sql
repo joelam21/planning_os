@@ -52,8 +52,8 @@ family_sales as (
     sum(case when f.order_date >= b.cagr_end_year_start and f.order_date < b.cagr_end_year_end then f.sale_dollars else 0 end) as sales_cagr_end_year,
     max(b.cagr_start_year) as cagr_start_year,
     max(b.cagr_end_year) as cagr_end_year
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join bounds b
   group by 1

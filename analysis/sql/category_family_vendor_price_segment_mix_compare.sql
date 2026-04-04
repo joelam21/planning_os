@@ -34,8 +34,8 @@ base_filtered as (
     coalesce(h.vendor_name, 'Unknown Vendor') as vendor_name,
     f.sale_dollars,
     f.bottles_sold
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item_business_history h
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item_business_history h
     on f.item_number = h.item_number
    and f.order_date >= h.business_valid_from
    and (h.business_valid_to is null or f.order_date <= h.business_valid_to)
@@ -49,26 +49,40 @@ base_filtered as (
       or h.package_size_tier = x.package_size_tier
     )
 ),
+vendor_names as (
+  select
+    vendor_number,
+    vendor_name
+  from (
+    select
+      vendor_number,
+      vendor_name,
+      row_number() over (partition by vendor_number order by count(*) desc, vendor_name) as rn
+    from base_filtered
+    group by 1, 2
+  )
+  where rn = 1
+),
 vendor_period_totals as (
   select
     period_order,
     period_year,
     vendor_number,
-    vendor_name,
     sum(sale_dollars) as sales_t12m,
     sum(bottles_sold) as units_t12m
   from base_filtered
-  group by 1, 2, 3, 4
+  group by 1, 2, 3
 ),
 latest_period_top_vendors as (
   select
-    vendor_number,
-    vendor_name,
+    vpt.vendor_number,
+    vn.vendor_name,
     row_number() over (
-      order by sales_t12m desc, vendor_name, vendor_number
+      order by vpt.sales_t12m desc, vn.vendor_name, vpt.vendor_number
     ) as vendor_rank
-  from vendor_period_totals
-  where period_order = 0
+  from vendor_period_totals vpt
+  join vendor_names vn on vpt.vendor_number = vn.vendor_number
+  where vpt.period_order = 0
   qualify vendor_rank <= 3
 ),
 segment_sales as (
@@ -84,7 +98,6 @@ segment_sales as (
   from base_filtered b
   left join latest_period_top_vendors t
     on b.vendor_number = t.vendor_number
-   and b.vendor_name = t.vendor_name
   group by 1, 2, 3, 4, 5, 6
 )
 select
