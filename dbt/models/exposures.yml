@@ -1,24 +1,22 @@
 version: 2
 
 exposures:
-  - name: store_performance_analysis_notebook
+  - name: sku_velocity_analysis_notebook
     type: analysis
     maturity: medium
-    url: "notebooks/01_store_performance_analysis.ipynb"
-    description: "Notebook analysis of market structure, chain performance, and store productivity."
+    url: "notebooks/02_sku_velocity_analysis.ipynb"
+    description: "Notebook analysis of SKU tier velocity, catalog productivity, and long-tail impact."
     depends_on:
-      - ref('fct_store_daily_sales')
-      - ref('dim_store')
-      - ref('dim_item')
+      - ref('fct_sku_velocity')
     owner:
       name: Joel Am
       email: joelam21@gmail.com
 
-  - name: query_exploration_notebook
+  - name: category_growth_analysis_notebook
     type: analysis
-    maturity: low
-    url: "notebooks/query_exploration_notebook.ipynb"
-    description: "Ad hoc exploration notebook used for model validation, pipeline checks, and profiling."
+    maturity: medium
+    url: "notebooks/03_category_growth_analysis.ipynb"
+    description: "Notebook analysis of tequila category growth, vendor share shifts, and price segment mix."
     depends_on:
       - ref('fct_liquor_sales')
       - ref('fct_store_daily_sales')
