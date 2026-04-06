@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_store_attributes
+    description: >
+      One row per store_number, deduplicated to the latest known attributes.
+      Chain label is derived from store_name pattern matching.
+      Intended as the source for snap_store — business logic lives here,
+      not in the snapshot.
+    columns:
+      - name: store_number
+        description: "{{ doc('store_number') }}"
+        tests:
+          - not_null
+          - unique
+
+      - name: chain
+        description: >
+          Derived chain label from store_name pattern matching.
+          Stores not matching a known chain are classified as INDEPENDENT.
+        tests:
+          - not_null
