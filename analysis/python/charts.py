@@ -47,6 +47,40 @@ PRICE_POSITION_SEGMENT_ORDER = [
     "unknown",
 ]
 
+PRICE_POSITION_SEGMENT_DISPLAY_LABELS = {
+    "budget_standard": "Budget/Standard",
+    "premium_plus": "Premium+",
+    "bulk_or_bundle": "Bulk/Bundle",
+    "trial_size": "Trial Size",
+}
+
+
+def _display_price_segment_label(segment_name: str) -> str:
+    """Return human-readable labels for display without changing raw segment values."""
+    return PRICE_POSITION_SEGMENT_DISPLAY_LABELS.get(str(segment_name), str(segment_name))
+
+
+def _should_draw_segment_label(
+    ax,
+    segment_value_k: float,
+    total_value_k: float,
+    min_segment_pct: float = 9.0,
+    min_pixel_height: float = 14.0,
+) -> bool:
+    """Gate segment labels by share and rendered height for readability."""
+    if segment_value_k <= 0 or total_value_k <= 0:
+        return False
+
+    segment_pct = (segment_value_k / total_value_k) * 100
+    if segment_pct < min_segment_pct:
+        return False
+
+    y_min, y_max = ax.get_ylim()
+    axis_height_px = max(ax.bbox.height, 1.0)
+    data_per_px = (y_max - y_min) / axis_height_px if y_max > y_min else 0
+    min_height_k = data_per_px * min_pixel_height
+    return segment_value_k >= min_height_k
+
 
 def plot_family_growth(df_family: pd.DataFrame, month_start: str = "", trend_years: int = 3) -> None:
     """Horizontal bar chart of category family T12M sales with inside/outside annotations."""
@@ -487,7 +521,7 @@ def plot_vendor_stacked_price_segment_chart(
             values_k,
             bottom=bottom / 1000.0,
             color=palette[i % len(palette)],
-            label=segment_name,
+            label=_display_price_segment_label(segment_name),
         )
         bottom += pivot_df[segment_name]
 
@@ -499,11 +533,30 @@ def plot_vendor_stacked_price_segment_chart(
     ax.set_xticks(range(len(pivot_df)))
     ax.set_xticklabels(vendor_labels, rotation=0, ha="center", fontsize=8)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"${x:,.0f}"))
-    ax.legend(title="Price Position Segment", loc="upper center", bbox_to_anchor=(0.5, 0.92), ncol=min(4, max(1, len(pivot_df.columns))))
 
     totals_k = bottom / 1000.0
     max_h = totals_k.max()
     ax.set_ylim(0, max_h * 1.24)
+    for idx, (_, row) in enumerate(pivot_df.iterrows()):
+        running_k = 0.0
+        total_k = totals_k.iloc[idx]
+        for segment_name in pivot_df.columns:
+            segment_k = row[segment_name] / 1000.0
+            if not _should_draw_segment_label(ax, segment_k, total_k):
+                running_k += segment_k
+                continue
+            ax.text(
+                idx,
+                running_k + (segment_k / 2),
+                _display_price_segment_label(segment_name),
+                ha="center",
+                va="center",
+                fontsize=8,
+                color="white",
+                fontweight="bold",
+            )
+            running_k += segment_k
+
     for idx, (index_key, total_k) in enumerate(zip(pivot_df.index, totals_k)):
         avg_price = asp_lookup.get(index_key)
         avg_price_label = "n/a" if pd.isna(avg_price) else f"${avg_price:,.2f}"
@@ -830,21 +883,20 @@ def plot_vendor_price_segment_compare(
                 values_k,
                 bottom=bottom / 1000.0,
                 color=color_map.get(segment_name, "#7f7f7f"),
-                label=segment_name,
+                label=_display_price_segment_label(segment_name),
             )
             for idx, (bar, value, total_value) in enumerate(zip(bars, values, totals)):
-                if value <= 0 or total_value <= 0:
-                    continue
-                pct = value / total_value * 100
-                if pct < 8:
+                value_k = value / 1000.0
+                total_k = total_value / 1000.0
+                if not _should_draw_segment_label(ax, value_k, total_k):
                     continue
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
                     (bottom.iloc[idx] + value / 2) / 1000.0,
-                    f"{pct:.0f}%",
+                    _display_price_segment_label(segment_name),
                     ha="center",
                     va="center",
-                    fontsize=9,
+                    fontsize=8,
                     color="white",
                     fontweight="bold",
                 )
@@ -873,18 +925,11 @@ def plot_vendor_price_segment_compare(
 
     axes[0].set_ylabel("Sales T12M ($k)")
 
-    handles = [
-        mpatches.Patch(color=color_map.get(segment, "#7f7f7f"), label=segment)
-        for segment in PRICE_POSITION_SEGMENT_ORDER
-        if any(segment in payload[1].columns for payload in subplot_payloads)
-    ]
-
     subtitle = f" — T12M from {_month_label(month_start)}" if month_start else ""
     chart_title = title_override or f"Vendor Price Segment Mix Comparison (Top 3 + Other) - {category_family}{subtitle}"
     fig.suptitle(chart_title, fontsize=14, fontweight="bold", y=0.98)
-    fig.legend(handles=handles, title="Price Position Segment", loc="upper center", bbox_to_anchor=(0.5, 0.90), ncol=min(4, max(1, len(handles))))
 
-    plt.tight_layout(rect=[0, 0, 1, 0.86])
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     plt.show()
 
 
