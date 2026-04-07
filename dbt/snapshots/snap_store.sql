@@ -8,6 +8,7 @@
         check_cols=[
             'store_name',
             'chain',
+            'store_channel',
             'address',
             'city',
             'zip_code',
@@ -22,6 +23,7 @@ select
     store_number,
     store_name,
     chain,
+    store_channel,
     address,
     city,
     zip_code,
