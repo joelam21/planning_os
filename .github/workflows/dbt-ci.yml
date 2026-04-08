@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       DBT_ACCOUNT: ${{ secrets.DBT_ACCOUNT }}
       DBT_CI_ROLE: ${{ secrets.DBT_CI_ROLE }}
       DBT_CI_SCHEMA: ${{ secrets.DBT_CI_SCHEMA }}
@@ -59,40 +60,55 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Create dbt profile for CI
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'YAML'
+          planning_os:
+            target: ci
+            outputs:
+              ci:
+                type: snowflake
+                account: "{{ env_var('DBT_ACCOUNT') }}"
+                user: "{{ env_var('DBT_USER') }}"
+                password: "{{ env_var('DBT_PASSWORD') }}"
+                role: "{{ env_var('DBT_CI_ROLE') }}"
+                database: "{{ env_var('DBT_DATABASE') }}"
+                warehouse: "{{ env_var('DBT_WAREHOUSE') }}"
+                schema: "{{ env_var('DBT_CI_SCHEMA', 'CI') }}"
+                threads: 4
+                client_session_keep_alive: true
+                query_tag: planning-os-ci
+          YAML
+
       - name: dbt debug
-        working-directory: dbt
         run: dbt debug --target ci
 
       - name: dbt build — staging layer
-        working-directory: dbt
         run: |
           dbt build \
             --select staging \
             --target ci
 
       - name: dbt build — intermediate layer
-        working-directory: dbt
         run: |
           dbt build \
             --select int \
             --target ci
 
       - name: dbt build — marts layer
-        working-directory: dbt
         run: |
           dbt build \
             --select marts \
             --target ci
 
       - name: dbt test — singular tests
-        working-directory: dbt
         run: |
           dbt test \
             --select test_type:singular \
             --target ci
 
       - name: dbt source freshness
-        working-directory: dbt
         run: |
           dbt source freshness \
             --target ci
