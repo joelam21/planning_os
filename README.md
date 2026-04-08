@@ -137,7 +137,7 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 
 ## Known Data Limitations and Modeling Decisions
 
-**Sell-in vs. sell-through:** The dataset represents store purchases from the state (wholesale sell-in), not consumer purchases (sell-through). Daily data reflects ordering behavior, not consumer demand. Weekly and monthly aggregation is more appropriate for demand-style analysis.
+**Sell-in vs. sell-through:** The dataset represents store purchases from the state (wholesale sell-in), not consumer purchases (sell-through). Daily data reflects ordering behavior, not consumer demand. Weekly and monthly aggregation is more appropriate for demand-style analysis. Raw source data is preserved in the PLANNING_OS.RAW schema before transformation, allowing reprocessing from source without re-ingestion.
 
 **Returns handling:** Source data includes legitimate return invoices identified by invoice numbers starting with RINV-. Return rows are typically negative. A custom data quality test (`assert_negative_values_must_be_returns`) ensures negative values only appear on RINV invoices. Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` and monitored periodically — rare but preserved to maintain data lineage.
 
@@ -152,7 +152,7 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 ## Current State
 
 **Ingestion and warehouse:**
-- Parameterized ingestion pipeline running into Snowflake
+- Parameterized ingestion pipeline loading source data into PLANNING_OS.RAW
 - Historical coverage extends through 2025 and continues forward as new source data becomes available
 
 **dbt modeling:**

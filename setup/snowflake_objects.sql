@@ -7,18 +7,17 @@
     schemas. Run as SYSADMIN or ACCOUNTADMIN before
     running snowflake_roles.sql or the ingestion pipeline.
 
-  Current implementation note:
-    The ingestion pipeline currently loads source data
-    directly into the DEV schema. The RAW schema below
-    reflects the intended production architecture where
-    raw source data lands separately before dbt
-    transformation. Separating RAW and DEV enforces
-    ELT boundaries more strictly and is a documented
-    next step for this project.
+    Architecture note:
+        The ingestion pipeline loads source data into the RAW
+        schema. dbt transformation models read from RAW and
+        write their output to DEV. This enforces ELT boundaries
+        — raw source data is preserved separately from
+        transformed analytical output, allowing reprocessing
+        from source without re-hitting the API.
 
   Schemas created:
-    PLANNING_OS.RAW  — intended landing zone for raw 
-                       source data before transformation
+    PLANNING_OS.RAW  — ingestion landing zone for raw source 
+                       data before dbt transformation
     PLANNING_OS.DEV  — dbt transformation output
                        (staging, intermediate, marts)
     PLANNING_OS.CI   — isolated schema for CI/CD runs

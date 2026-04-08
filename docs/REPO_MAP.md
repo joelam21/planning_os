@@ -183,6 +183,16 @@ Project documentation.
 
 ---
 
+## setup/
+
+Snowflake infrastructure and access setup scripts.
+
+`snowflake_objects.sql` — creates the Snowflake warehouse, database, and schemas required to run the project: `PLANNING_OS.RAW` (ingestion landing zone), `PLANNING_OS.DEV` (dbt transformation output), and `PLANNING_OS.CI` (CI/CD isolated schema). Includes auto-suspend configuration for cost efficiency and `IF NOT EXISTS` guards for safe re-execution. Run before `snowflake_roles.sql`.
+
+`snowflake_roles.sql` — creates project roles and grants warehouse, database, and schema privileges for admin, development, CI, and read-only access patterns.
+
+---
+
 ## scripts/
 
 Automation and workflow helper scripts for setup, bootstrap, and local workflows.
