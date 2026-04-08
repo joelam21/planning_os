@@ -2420,3 +2420,157 @@ def plot_sku_full_scatter(
 
     plt.tight_layout()
     plt.show()
+
+
+# ---------------------------------------------------------------------------
+# Store performance charts
+# ---------------------------------------------------------------------------
+
+_CHAIN_COLORS: dict[str, str] = {
+    "HY-VEE":    "#1f77b4",
+    "CASEY'S":   "#ff7f0e",
+    "FAREWAY":   "#2ca02c",
+    "WALMART":   "#d62728",
+    "SAM'S CLUB": "#9467bd",
+    "Other":     "#aec7e8",
+}
+_DEFAULT_CHAIN_COLOR = "#cccccc"
+
+
+def _chain_color(chain_group: str) -> str:
+    return _CHAIN_COLORS.get(chain_group, _DEFAULT_CHAIN_COLOR)
+
+
+def plot_chain_market_share(
+    df: "pd.DataFrame",
+    month_start: str,
+    trailing_weeks: int,
+) -> None:
+    """Horizontal bar chart: total sales by chain group with % of market labels.
+
+    df must have columns: chain_group, total_sales, pct_of_market.
+    Rows should be ordered by total_sales descending (SQL already does this).
+    """
+    df_plot = df.sort_values("total_sales")
+
+    colors = [_chain_color(c) for c in df_plot["chain_group"]]
+
+    fig, ax = plt.subplots(figsize=(9, max(3, len(df_plot) * 0.55)))
+
+    bars = ax.barh(df_plot["chain_group"], df_plot["total_sales"], color=colors)
+
+    x_max = df_plot["total_sales"].max()
+    for bar, (_, row) in zip(bars, df_plot.iterrows()):
+        pct = row["pct_of_market"]
+        val = row["total_sales"]
+        label = _literal_currency(f"${val / 1_000_000:.1f}M  ({pct:.0%})")
+        threshold = x_max * 0.35
+        if val >= threshold:
+            ax.text(val - x_max * 0.01, bar.get_y() + bar.get_height() / 2,
+                    label, ha="right", va="center", fontsize=8.5, color="white", fontweight="bold")
+        else:
+            ax.text(val + x_max * 0.01, bar.get_y() + bar.get_height() / 2,
+                    label, ha="left", va="center", fontsize=8.5, color="#333333")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.xaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: _literal_currency(f"${x / 1_000_000:.1f}M"))
+    )
+    ax.set_xlabel("Total Sales")
+    ax.set_title(
+        f"Chain Market Share — Total Sales\nT{trailing_weeks}W to {_month_label(month_start)}",
+        fontsize=10,
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_store_productivity(
+    df: "pd.DataFrame",
+    month_start: str,
+    trailing_weeks: int,
+) -> None:
+    """Horizontal bar chart: avg sales per store by chain group.
+
+    df must have columns: chain_group, avg_sales_per_store, store_count.
+    """
+    df_plot = df.sort_values("avg_sales_per_store")
+
+    colors = [_chain_color(c) for c in df_plot["chain_group"]]
+
+    fig, ax = plt.subplots(figsize=(9, max(3, len(df_plot) * 0.55)))
+
+    bars = ax.barh(df_plot["chain_group"], df_plot["avg_sales_per_store"], color=colors)
+
+    x_max = df_plot["avg_sales_per_store"].max()
+    for bar, (_, row) in zip(bars, df_plot.iterrows()):
+        val = row["avg_sales_per_store"]
+        n = int(row["store_count"])
+        label = _literal_currency(f"${val / 1_000:,.0f}K  (n={n})")
+        threshold = x_max * 0.45
+        if val >= threshold:
+            ax.text(val - x_max * 0.01, bar.get_y() + bar.get_height() / 2,
+                    label, ha="right", va="center", fontsize=8.5, color="white", fontweight="bold")
+        else:
+            ax.text(val + x_max * 0.01, bar.get_y() + bar.get_height() / 2,
+                    label, ha="left", va="center", fontsize=8.5, color="#333333")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.xaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: _literal_currency(f"${x / 1_000:,.0f}K"))
+    )
+    ax.set_xlabel("Avg Sales per Store")
+    ax.set_title(
+        f"Store Productivity — Avg Sales per Store\nT{trailing_weeks}W to {_month_label(month_start)}",
+        fontsize=10,
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_channel_mix(
+    df: "pd.DataFrame",
+    month_start: str,
+    trailing_weeks: int,
+) -> None:
+    """Horizontal bar chart: total sales by store channel with % and store count labels.
+
+    df must have columns: store_channel, total_sales, pct_of_market, store_count.
+    """
+    df_plot = df.sort_values("total_sales")
+
+    fig, ax = plt.subplots(figsize=(9, max(3, len(df_plot) * 0.55)))
+
+    bars = ax.barh(df_plot["store_channel"], df_plot["total_sales"], color="#5b9bd5")
+
+    x_max = df_plot["total_sales"].max()
+    for bar, (_, row) in zip(bars, df_plot.iterrows()):
+        val = row["total_sales"]
+        pct = row["pct_of_market"]
+        n = int(row["store_count"])
+        label = _literal_currency(f"${val / 1_000_000:.1f}M  ({pct:.0%}, n={n})")
+        threshold = x_max * 0.45
+        if val >= threshold:
+            ax.text(val - x_max * 0.01, bar.get_y() + bar.get_height() / 2,
+                    label, ha="right", va="center", fontsize=8.5, color="white", fontweight="bold")
+        else:
+            ax.text(val + x_max * 0.01, bar.get_y() + bar.get_height() / 2,
+                    label, ha="left", va="center", fontsize=8.5, color="#333333")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.xaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: _literal_currency(f"${x / 1_000_000:.1f}M"))
+    )
+    ax.set_xlabel("Total Sales")
+    ax.set_title(
+        f"Store Channel Mix — Total Sales by Retail Format\nT{trailing_weeks}W to {_month_label(month_start)}",
+        fontsize=10,
+    )
+
+    plt.tight_layout()
+    plt.show()
