@@ -31,7 +31,7 @@ Two analytical use cases answer the core question from different angles:
 
 **What makes it sophisticated:** The price tier dimension was engineered from scratch — the source data contains no native price classification. A dual-signal model classifies each SKU across retail price and normalized price-per-volume, with separate handling for bundle packs, trial formats, and size normalization. Tier definitions are consistent with industry convention (Value, Standard, Premium, Super Premium, Ultra Premium, Luxury).
 
-→ `notebooks/03_category_growth_analysis.ipynb`
+→ `notebooks/01_category_growth_analysis.ipynb`
 → Backed by `dim_item_business_history` and parameterized SQL templates in `analysis/sql/`
 
 ---

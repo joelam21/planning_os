@@ -15,7 +15,7 @@ exposures:
   - name: category_growth_analysis_notebook
     type: analysis
     maturity: medium
-    url: "notebooks/03_category_growth_analysis.ipynb"
+    url: "notebooks/01_category_growth_analysis.ipynb"
     description: "Notebook analysis of tequila category growth, vendor share shifts, and price segment mix."
     depends_on:
       - ref('fct_liquor_sales')

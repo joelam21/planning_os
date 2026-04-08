@@ -159,13 +159,13 @@ Additional utility files in the ingestion directory include `config.py` (configu
 
 Analysis and validation notebooks. The primary analysis notebooks are backed by the reusable SQL and chart layers in `analysis/` — business logic does not live inside notebook cells.
 
-`01_store_performance_analysis.ipynb`
+`03_store_performance_analysis.ipynb`
 Market structure and store productivity analysis. Explores revenue concentration across store formats, chain vs. independent dynamics, and store-level performance patterns.
 
 `02_sku_velocity_analysis.ipynb`
 SKU rationalization, catalog productivity, and inventory velocity. Dual-dimension Pareto classification across volume and revenue, tier alignment matrix, item-level archetype analysis, category family breakdown, and full catalog scatter visualization.
 
-`03_category_growth_analysis.ipynb`
+`01_category_growth_analysis.ipynb`
 Tequila category growth, vendor share dynamics, and price segment mix. Covers category family context, vendor share evolution 2021-2025, CAGR comparison, before/after price position segmentation, item-level drill-down, and chain-level analysis.
 
 `query_exploration_notebook.ipynb`
