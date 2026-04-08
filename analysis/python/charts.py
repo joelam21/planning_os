@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+import re
 from datetime import datetime
 from matplotlib import colors as mcolors
 
@@ -58,6 +59,14 @@ PRICE_POSITION_SEGMENT_DISPLAY_LABELS = {
 def _display_price_segment_label(segment_name: str) -> str:
     """Return human-readable labels for display without changing raw segment values."""
     return PRICE_POSITION_SEGMENT_DISPLAY_LABELS.get(str(segment_name), str(segment_name))
+
+
+def _display_vendor_name(vendor_name: str) -> str:
+    """Return a clean vendor display name without numeric prefixes."""
+    cleaned = re.sub(r"^\s*\d+\s*[-:]\s*", "", str(vendor_name)).strip()
+    if cleaned.isupper():
+        return cleaned.title()
+    return cleaned
 
 
 def _should_draw_segment_label(
@@ -376,7 +385,7 @@ def plot_vendor_stacked_category_chart(
     )
 
     vendor_labels = [
-        f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+        textwrap.fill(_display_vendor_name(vendor_name), width=14)
         for _, vendor_number, vendor_name in pivot_df.index
     ]
 
@@ -506,7 +515,7 @@ def plot_vendor_stacked_price_segment_chart(
     asp_lookup = plot_vendor_totals.set_index(["vendor_rank", "vendor_number", "vendor_name"])["avg_selling_price"]
 
     vendor_labels = [
-        f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+        textwrap.fill(_display_vendor_name(vendor_name), width=14)
         for _, vendor_number, vendor_name in pivot_df.index
     ]
 
@@ -703,7 +712,7 @@ def plot_vendor_stacked_store_channel_chart(
     channel_asp_lookup = channel_asp_df.set_index(["vendor_rank", "vendor_number", "vendor_name", "store_channel"])["channel_asp"]
 
     vendor_labels = [
-        f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+        textwrap.fill(_display_vendor_name(vendor_name), width=14)
         for _, vendor_number, vendor_name in pivot_df.index
     ]
 
@@ -859,7 +868,7 @@ def plot_vendor_store_channel_compare(
 
     for ax, (period_year, pivot_df, asp_lookup, totals) in zip(axes, subplot_payloads):
         vendor_labels = [
-            f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+            textwrap.fill(_display_vendor_name(vendor_name), width=14)
             for _, vendor_number, vendor_name in pivot_df.index
         ]
         bottom = pd.Series([0.0] * len(pivot_df), index=pivot_df.index)
@@ -1056,7 +1065,7 @@ def plot_vendor_share_donuts_3y(
         )
 
         legend_labels = [
-            "Other Vendors" if row["vendor_number"] == "Other" else f"{row['vendor_number']} - {row['vendor_name']}"
+            "Other Vendors" if row["vendor_number"] == "Other" else _display_vendor_name(row["vendor_name"])
             for _, row in period_df.iterrows()
         ]
         ax.legend(
@@ -1213,7 +1222,7 @@ def plot_vendor_price_segment_compare(
 
     for ax, (period_year, pivot_df, asp_lookup, totals) in zip(axes, subplot_payloads):
         vendor_labels = [
-            f"{vendor_number}\n{textwrap.fill(str(vendor_name), width=14)}"
+            textwrap.fill(_display_vendor_name(vendor_name), width=14)
             for _, vendor_number, vendor_name in pivot_df.index
         ]
         bottom = pd.Series([0.0] * len(pivot_df), index=pivot_df.index)
@@ -1582,7 +1591,7 @@ def plot_vendor_category_monthly_trend(
 
     plot_df = df_trend.copy()
     plot_df["sales_month"] = pd.to_datetime(plot_df["sales_month"])
-    plot_df["vendor_label"] = plot_df["vendor_name"].astype(str) + " (" + plot_df["vendor_number"].astype(str) + ")"
+    plot_df["vendor_label"] = plot_df["vendor_name"].map(_display_vendor_name)
 
     vendor_order = (
         plot_df[["vendor_rank", "vendor_label"]]

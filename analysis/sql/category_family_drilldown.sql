@@ -1,3 +1,25 @@
+/*
+  category_family_drilldown.sql
+  -------------------------------------------------------
+  Purpose:
+    Calculates trailing-12-month sales and prior-year trailing-12-month sales by
+    category_name within a selected category_family, with YoY percentage change and
+    a grand total row for context.
+
+  Parameters:
+    month_start: Anchor month (YYYY-MM-01) used to build current and prior T12M windows.
+    category_family: Category family filter for the category-level drilldown.
+    database: Database containing marts and dimensions referenced in the query.
+    schema: Schema containing fct_liquor_sales and dim_item.
+
+  Returns:
+    Grain is category_name within the selected family plus one grand total row.
+    Key columns include sales_t12m, sales_prior_t12m, t12m_yoy_pct, and row_type.
+
+  Used by:
+    notebooks/01_category_growth_analysis.ipynb
+*/
+
 with params as (
   select
     to_date('{month_start}') as month_start,
