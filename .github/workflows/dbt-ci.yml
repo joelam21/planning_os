@@ -10,10 +10,11 @@ on:
 jobs:
   dbt-ci:
     runs-on: ubuntu-latest
+    environment: dbt
 
     env:
       DBT_ACCOUNT: ${{ secrets.DBT_ACCOUNT }}
-      DBT_CI_ROLE: ${{ secrets.DBT_CI_ROLE }}
+      DBT_CI_ROLE: ${{ secrets.DBT_CI_ROLE || secrets.DBT_ROLE }}
       DBT_CI_SCHEMA: ${{ secrets.DBT_CI_SCHEMA || 'CI' }}
       DBT_DATABASE: ${{ secrets.DBT_DATABASE }}
       DBT_USER: ${{ secrets.DBT_USER }}
@@ -52,6 +53,7 @@ jobs:
 
           if [ ${#missing[@]} -gt 0 ]; then
             echo "Missing required GitHub secrets: ${missing[*]}"
+            echo "Set DBT_CI_ROLE or DBT_ROLE for CI role resolution."
             exit 1
           fi
 
