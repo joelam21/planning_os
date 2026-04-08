@@ -25,3 +25,45 @@ models:
         description: "Duplicate invoice line identifier found upstream."
       - name: duplicate_row_count
         description: "Number of source-shaped rows observed for the duplicate key."
+
+  - name: int_anomalous_returns
+    description: "Monitoring model that flags return-labeled invoices (RINV-) carrying unexpected positive sales or volume metrics. Grain is one row per anomalous invoice_item_number from fct_liquor_sales to support return-aware data quality review."
+    columns:
+      - name: invoice_item_number
+        description: "Invoice line identifier for a return-labeled row with positive-valued metrics."
+        tests:
+          - not_null
+          - unique
+
+      - name: anomaly_type
+        description: "Static anomaly label for this monitor (positive_return)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - positive_return
+
+      - name: loaded_at
+        description: "Source load timestamp for triaging and recency checks."
+
+  - name: int_unlabeled_negative_returns
+    description: "Monitoring model that flags negative sales or volume rows that are not labeled as returns (invoice_item_number not prefixed with RINV-). Grain is one row per anomalous invoice_item_number and complements int_anomalous_returns by catching unlabeled negative-return behavior."
+    columns:
+      - name: invoice_item_number
+        description: "Invoice line identifier for a negative-valued row lacking a return prefix."
+        tests:
+          - not_null
+          - unique
+
+      - name: anomaly_type
+        description: "Static anomaly label for this monitor (unlabeled_negative_return)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - unlabeled_negative_return
+
+      - name: loaded_at
+        description: "Source load timestamp for triaging and recency checks."

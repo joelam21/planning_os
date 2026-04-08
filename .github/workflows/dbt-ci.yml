@@ -1,44 +1,125 @@
-name: dbt-ci
+name: dbt CI
 
 on:
+  push:
+    branches: [dev]
   pull_request:
     branches: [dev]
-  workflow_dispatch:
+  workflow_dispatch: # manual trigger from GitHub Actions UI
 
 jobs:
-  dbt-parse:
+  dbt-ci:
     runs-on: ubuntu-latest
+    environment: dbt
+
+    env:
+      DBT_ACCOUNT: ${{ secrets.DBT_ACCOUNT }}
+      DBT_CI_ROLE: ${{ secrets.DBT_CI_ROLE || secrets.DBT_ROLE }}
+      DBT_CI_SCHEMA: ${{ secrets.DBT_CI_SCHEMA || 'CI' }}
+      DBT_DATABASE: ${{ secrets.DBT_DATABASE }}
+      DBT_USER: ${{ secrets.DBT_USER }}
+      DBT_PASSWORD: ${{ secrets.DBT_PASSWORD }}
+      DBT_WAREHOUSE: ${{ secrets.DBT_WAREHOUSE }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Validate required dbt secrets
+        run: |
+          set -euo pipefail
+          required_vars=(
+            DBT_ACCOUNT
+            DBT_CI_ROLE
+            DBT_DATABASE
+            DBT_USER
+            DBT_PASSWORD
+            DBT_WAREHOUSE
+          )
+
+          missing=()
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              missing+=("$var")
+            fi
+          done
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required GitHub secrets: ${missing[*]}"
+            echo "Set DBT_CI_ROLE or DBT_ROLE for CI role resolution."
+            exit 1
+          fi
 
       - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create dbt profile for CI
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'YAML'
+          planning_os:
+            target: ci
+            outputs:
+              ci:
+                type: snowflake
+                account: "{{ env_var('DBT_ACCOUNT') }}"
+                user: "{{ env_var('DBT_USER') }}"
+                password: "{{ env_var('DBT_PASSWORD') }}"
+                role: "{{ env_var('DBT_CI_ROLE') }}"
+                database: "{{ env_var('DBT_DATABASE') }}"
+                warehouse: "{{ env_var('DBT_WAREHOUSE') }}"
+                schema: "{{ env_var('DBT_CI_SCHEMA', 'CI') }}"
+                threads: 4
+                client_session_keep_alive: true
+                query_tag: planning-os-ci
+          YAML
 
-      - name: Verify dbt install
-        run: dbt --version
+      - name: dbt debug
+        run: dbt debug --target ci
 
-      - name: Create dummy env vars for profile resolution
+      - name: dbt run — staging layer
         run: |
-          cat >> $GITHUB_ENV << 'EOF'
-          DBT_ACCOUNT=dummy_account
-          DBT_USER=dummy_user
-          DBT_PASSWORD=dummy_password
-          DBT_ROLE=dummy_role
-          DBT_DATABASE=PLANNING_OS
-          DBT_DEV_SCHEMA=DEV
-          DBT_SCHEMA=DEV
-          DBT_WAREHOUSE=dummy_wh
-          SNOWFLAKE_ACCOUNT=dummy_account
-          EOF
+          dbt run \
+            --select staging \
+            --target ci
 
-      - name: Parse project
-        run: dbt parse
+      - name: dbt run — intermediate layer
+        run: |
+          dbt run \
+            --select +int \
+            --target ci
+
+      - name: dbt snapshot
+        run: |
+          dbt snapshot \
+            --target ci
+
+      - name: dbt seed
+        run: |
+          dbt seed \
+            --target ci
+
+      - name: dbt build — marts layer
+        run: |
+          dbt build \
+            --select marts \
+            --target ci
+
+      - name: dbt test — singular tests
+        run: |
+          dbt test \
+            --select test_type:singular \
+            --target ci
+
+      - name: dbt source freshness
+        run: |
+          dbt source freshness \
+            --target ci
+        continue-on-error: true

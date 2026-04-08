@@ -14,3 +14,14 @@ snapshot-paths: ["dbt/snapshots"]
 clean-targets:
   - "target"
   - "dbt_packages"
+
+models:
+  planning_os:
+    staging:
+      +materialized: view
+    int:
+      +materialized: view
+    marts:
+      +materialized: table
+    monitoring:
+      +materialized: view

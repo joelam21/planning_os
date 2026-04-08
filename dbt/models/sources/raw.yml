@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: raw
     database: PLANNING_OS
-    schema: DEV
+    schema: RAW
     tables:
       - name: RAW_IOWA_LIQUOR
         config:

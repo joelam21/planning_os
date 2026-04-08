@@ -18,8 +18,8 @@ base_filtered as (
     coalesce(d.vendor_name, 'Unknown Vendor') as vendor_name,
     f.order_date,
     f.sale_dollars
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join params p
   where d.category_family = p.category_family

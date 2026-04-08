@@ -1,8 +1,7 @@
 with params as (
   select
     to_date('{month_start}') as month_start,
-    '{category_family}' as category_family,
-    '{package_size_tier}' as package_size_tier
+    '{category_family}' as category_family
 ),
 bounds as (
   select
@@ -15,11 +14,7 @@ bounds as (
 base_filtered as (
   select
     h.category_family,
-    case
-      when h.price_position_segment in ('premium_bulk', 'value_oversized', 'bundle_pack') then 'bulk_or_bundle'
-      when h.price_position_segment in ('trial_value', 'trial_premium', 'trial_luxury') then 'trial_size'
-      else h.price_position_segment
-    end as price_position_segment,
+    coalesce(s.store_channel, 'Unknown') as store_channel,
     coalesce(cast(h.vendor_number as varchar), 'Unknown Vendor Number') as vendor_number,
     coalesce(h.vendor_name, 'Unknown Vendor') as vendor_name,
     f.order_date,
@@ -30,12 +25,10 @@ base_filtered as (
     on f.item_number = h.item_number
    and f.order_date >= h.business_valid_from
    and (h.business_valid_to is null or f.order_date <= h.business_valid_to)
+  left join {database}.{schema}.dim_store s
+    on f.store_number = s.store_number
   cross join params p
   where h.category_family = p.category_family
-    and (
-      p.package_size_tier = ''
-      or h.package_size_tier = p.package_size_tier
-    )
 ),
 vendor_names as (
   select
@@ -51,10 +44,10 @@ vendor_names as (
   )
   where rn = 1
 ),
-vendor_segment_sales as (
+vendor_channel_sales as (
   select
     category_family,
-    price_position_segment,
+    store_channel,
     vendor_number,
     sum(case when order_date >= b.t12m_start and order_date < b.t12m_end then sale_dollars else 0 end) as sales_t12m,
     sum(case when order_date >= b.prior_t12m_start and order_date < b.prior_t12m_end then sale_dollars else 0 end) as sales_prior_t12m,
@@ -65,41 +58,41 @@ vendor_segment_sales as (
 ),
 vendor_totals as (
   select
-    vss.vendor_number,
+    vcs.vendor_number,
     vn.vendor_name,
-    sum(vss.sales_t12m) as vendor_sales_t12m,
-    sum(vss.units_t12m) as vendor_units_t12m,
+    sum(vcs.sales_t12m) as vendor_sales_t12m,
+    sum(vcs.units_t12m) as vendor_units_t12m,
     row_number() over (
-      order by sum(vss.sales_t12m) desc, vn.vendor_name, vss.vendor_number
+      order by sum(vcs.sales_t12m) desc, vn.vendor_name, vcs.vendor_number
     ) as vendor_rank
-  from vendor_segment_sales vss
-  join vendor_names vn on vss.vendor_number = vn.vendor_number
+  from vendor_channel_sales vcs
+  join vendor_names vn on vcs.vendor_number = vn.vendor_number
   group by 1, 2
 ),
 detail_rows as (
   select
-    vss.price_position_segment,
-    vss.vendor_number,
+    vcs.store_channel,
+    vcs.vendor_number,
     vt.vendor_name,
     vt.vendor_rank,
-    vss.sales_t12m,
-    vss.sales_prior_t12m,
-    vss.units_t12m,
+    vcs.sales_t12m,
+    vcs.sales_prior_t12m,
+    vcs.units_t12m,
     case
-      when vss.sales_prior_t12m = 0 then null
-      else round(((vss.sales_t12m - vss.sales_prior_t12m) / vss.sales_prior_t12m) * 100, 2)
+      when vcs.sales_prior_t12m = 0 then null
+      else round(((vcs.sales_t12m - vcs.sales_prior_t12m) / vcs.sales_prior_t12m) * 100, 2)
     end as t12m_yoy_pct,
     case
-      when vss.units_t12m = 0 then null
-      else round(vss.sales_t12m / vss.units_t12m, 2)
+      when vcs.units_t12m = 0 then null
+      else round(vcs.sales_t12m / vcs.units_t12m, 2)
     end as avg_selling_price
-  from vendor_segment_sales vss
+  from vendor_channel_sales vcs
   join vendor_totals vt
-    on vss.vendor_number = vt.vendor_number
+    on vcs.vendor_number = vt.vendor_number
 )
 select
   'detail' as row_type,
-  price_position_segment,
+  store_channel,
   vendor_number,
   vendor_name,
   vendor_rank,
@@ -114,7 +107,7 @@ union all
 
 select
   'grand_total' as row_type,
-  'Grand Total' as price_position_segment,
+  'Grand Total' as store_channel,
   null as vendor_number,
   null as vendor_name,
   null as vendor_rank,
@@ -135,4 +128,4 @@ order by
   case when row_type = 'detail' then 0 else 1 end,
   vendor_rank nulls last,
   sales_t12m desc nulls last,
-  price_position_segment;
+  store_channel;

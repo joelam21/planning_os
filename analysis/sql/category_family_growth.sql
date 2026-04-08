@@ -1,3 +1,26 @@
+/*
+  category_family_growth.sql
+  -------------------------------------------------------
+  Purpose:
+    Computes month, trailing-3-month, trailing-12-month, and CAGR window sales
+    performance by category family with YoY deltas, plus a grand-total rollup.
+    Answers which category families are growing or declining versus prior periods.
+
+  Parameters:
+    month_start: Anchor month (YYYY-MM-01) for month/T3M/T12M and CAGR windows.
+    trend_years: Number of years used to derive CAGR start/end year windows.
+    database: Database containing marts and dimensions referenced in the query.
+    schema: Schema containing fct_liquor_sales and dim_item.
+
+  Returns:
+    Grain is category_family plus one grand total row.
+    Key columns include sales_month, sales_t3m, sales_t12m, YoY percentages,
+    sales_cagr_start_year, sales_cagr_end_year, and CAGR year bounds.
+
+  Used by:
+    notebooks/01_category_growth_analysis.ipynb
+*/
+
 with params as (
   select
     to_date('{month_start}') as month_start,
@@ -52,8 +75,8 @@ family_sales as (
     sum(case when f.order_date >= b.cagr_end_year_start and f.order_date < b.cagr_end_year_end then f.sale_dollars else 0 end) as sales_cagr_end_year,
     max(b.cagr_start_year) as cagr_start_year,
     max(b.cagr_end_year) as cagr_end_year
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join bounds b
   group by 1

@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: mon_pipeline_health
+    description: "Single-row monitoring view that aggregates raw-source freshness, fact-table coverage, and store-day mart coverage into one weekly pipeline health snapshot for operational review."
+    columns:
+      - name: observed_at
+        description: "Timestamp when the monitoring snapshot was computed."
+        tests:
+          - not_null
+
+      - name: raw_max_loaded_at
+        description: "Most recent loaded_at timestamp observed in RAW_IOWA_LIQUOR."
+
+      - name: raw_row_count
+        description: "Total row count in RAW_IOWA_LIQUOR at observation time."
+
+      - name: raw_lag_days
+        description: "Number of days between current_timestamp and raw_max_loaded_at."
+
+      - name: freshness_status
+        description: "Freshness classification based on raw lag thresholds (PASS <= 7 days, WARN > 7 days, ERROR > 14 days)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - PASS
+                  - WARN
+                  - ERROR
+
+      - name: fact_row_count
+        description: "Total row count in fct_liquor_sales."
+
+      - name: fact_min_order_date
+        description: "Earliest order_date currently present in fct_liquor_sales."
+
+      - name: fact_max_order_date
+        description: "Latest order_date currently present in fct_liquor_sales."
+
+      - name: daily_store_day_count
+        description: "Total row count in fct_store_daily_sales (store-day aggregates)."
+
+      - name: daily_min_order_date
+        description: "Earliest order_date currently present in fct_store_daily_sales."
+
+      - name: daily_max_order_date
+        description: "Latest order_date currently present in fct_store_daily_sales."

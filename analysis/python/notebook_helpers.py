@@ -54,8 +54,18 @@ def read_sql(project_root: Path, relative_path: str) -> str:
 
 
 def render_sql(sql_template: str, **params: Any) -> str:
-    """Render SQL template with python format placeholders like {month_start}."""
-    return sql_template.format(**params)
+    """Render SQL template with python format placeholders like {month_start}.
+
+    Automatically injects {database} and {schema} from environment variables
+    (DBT_DATABASE, DBT_DEV_SCHEMA) unless explicitly overridden in params.
+    """
+    load_dotenv()
+    resolved = {
+        "database": os.getenv("DBT_DATABASE", "planning_os"),
+        "schema": os.getenv("DBT_DEV_SCHEMA", "dev"),
+    }
+    resolved.update(params)
+    return sql_template.format(**resolved)
 
 
 def run_sql(engine: Any, sql: str) -> pd.DataFrame:

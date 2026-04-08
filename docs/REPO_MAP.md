@@ -1,179 +1,140 @@
-Repository Map
+# Repository Map
 
-This document explains the current structure and operational purpose of the `planning_os` repository.
+Fast orientation for the `planning_os` repository.
 
-The goal of this repo is to build a production-style analytics system for ingestion, transformation, validation, and analysis using Iowa liquor sales data.
-
----
-
-Root Directory
-
-These files are the primary entrypoints and operational scripts.
-
-`enter.sh`
-Activates the project local Python virtual environment (`.venv`) and loads environment context.
-
-`run.sh`
-Primary task runner for project workflows. Supports:
-- `doctor`
-- `snow-test`
-- `snow-sql-test`
-- `dbt-debug`
-- `ingest`
-- `transform`
-- `test`
-- `pipeline` (ingest -> snapshot -> transform -> test), including optional date-window parameters.
-
-`doctor.sh`
-Environment diagnostics and setup validation.
-
-`requirements.txt`
-Pinned Python and dbt-related dependencies.
-
-`README.md`
-Project overview, architecture, operational health criteria, and run procedures.
+Use this document to find where things live.
+Use [`README.md`](../README.md) for business framing, architecture, current state, quality gates, and analytical outcomes.
 
 ---
 
-dbt/
+## Top-Level Entry Points
 
+`enter.sh`  
+Activates the local project environment.
+
+`run.sh`  
+Unified local workflow runner for ingestion, dbt, testing, and the full pipeline.
+
+`doctor.sh`  
+Environment validation and drift checks.
+
+`requirements.txt`  
+Curated direct dependencies.
+
+`requirements-lock.txt`  
+Exact pinned environment for reproducibility.
+
+`.github/workflows/dbt-ci.yml`  
+GitHub Actions CI workflow for dbt validation in the CI schema.
+
+---
+
+## Main Project Areas
+
+### `dbt/`
 Transformation and semantic modeling layer.
 
-Current structure includes:
+`dbt/models/staging/`  
+Typed, cleaned source-shaped models.
 
-`dbt/models/sources/`
-- source definitions and freshness checks
-- `raw.yml` defines `RAW_IOWA_LIQUOR` and freshness thresholds
+`dbt/models/int/`  
+Intermediate business logic, deduplication, historical versioning, pricing logic, and monitoring helpers.
 
-`dbt/models/staging/`
-- cleaned and typed raw-source models
-- `stg_iowa_liquor.sql` and associated tests
+`dbt/models/marts/`  
+Analyst-facing facts and dimensions.
 
-`dbt/models/int/`
-- intermediate business logic and derived metrics
-- `int_iowa_liquor_sales.sql`
+`dbt/models/monitoring/`  
+Operational health and monitoring models.
 
-`dbt/models/marts/`
-- facts, dimensions, and monitoring models
-- `fct_liquor_sales` (atomic grain)
-- `fct_store_daily_sales` (store-day aggregate)
-- `dim_store` (Type 1 current-state from snapshot)
-- `dim_item` (Type 1 current-state from snapshot)
-- `mon_pipeline_health` (operational health summary)
-- `schema.yml` model-level metadata and tests
+`dbt/snapshots/`  
+Type 2 historical snapshots for stores and items.
 
-`dbt/snapshots/`
-- Type 2 historical entity tracking
-- `snap_store.sql`
-- `snap_item.sql`
-- `snapshots.yml` metadata for snapshot docs
+`dbt/tests/`  
+Singular business-rule, grain, reconciliation, and data-quality tests.
 
-`dbt/tests/`
-- singular data tests including:
-  - business-rule checks
-  - fact-to-mart reconciliation checks
-  - grain integrity checks
-  - raw-to-staging date preservation checks
+`dbt/models/docs/`  
+Reusable documentation blocks for columns and canonical metrics.
 
-`dbt/models/docs/`
-- centralized reusable column definitions (`column_definitions.md`) used via `{{ doc(...) }}` references.
+`dbt/models/exposures.yml`  
+Notebook exposure definitions and lineage hooks.
 
-`dbt/models/exposures.yml`
-- notebook exposures and model lineage for analysis dependencies.
+### `analysis/`
+Reusable analytical layer behind the notebooks.
 
----
+`analysis/sql/`  
+Parameterized SQL templates used by notebooks.
 
-ingestion/
+`analysis/python/charts.py`  
+Shared plotting functions.
 
-Python ingestion pipeline and Snowflake loading helpers.
+`analysis/python/notebook_helpers.py`  
+Notebook utility functions for SQL rendering and execution.
 
-`ingestion/run_ingestion.py`
-CLI ingestion runner with source/date window parameters.
+### `ingestion/`
+Python ingestion pipeline and Snowflake load helpers.
 
-`ingestion/sources/iowa_liquor.py`
-Socrata API fetch logic with batching and optional date filters.
+### `notebooks/`
+Primary analytical artifacts:
 
-`ingestion/common/snowflake.py`
-Snowflake connection, table creation, insert, and date-range deletion helpers.
+- `01_category_growth_analysis.ipynb`
+- `02_sku_velocity_analysis.ipynb`
+- `03_store_performance_analysis.ipynb`
+- `query_exploration_notebook.ipynb` for ad hoc validation
 
----
+### `docs/`
+Supporting project documentation.
 
-notebooks/
+- `MODEL_CHECKLIST.md` — durable model design guardrails
+- `PROJECT_START.md` — original project design notes
+- `REPO_MAP.md` — this file
 
-Exploratory analysis and validation notebooks.
+### `setup/`
+Snowflake object and role setup SQL.
 
-`01_store_performance_analysis.ipynb`
-Primary analysis notebook for market structure and store productivity.
+### `scratch_sql/`
+Local analysis and validation queries not treated as shared production artifacts.
 
-`query_exploration_notebook.ipynb`
-Ad hoc validation and exploration notebook (including pipeline health checks).
+### `logs/`
+Local runtime and query logs.
 
 ---
 
-docs/
+## Most Important Models
 
-Project documentation and references.
+`fct_liquor_sales`  
+Atomic invoice-line fact.
 
-`PROJECT_START.md`
-Project startup guidance.
+`fct_store_daily_sales`  
+Store-day aggregate fact.
 
-`MODEL_CHECKLIST.md`
-Model design checklist (grain, key, business question, layer placement).
+`fct_sku_velocity`  
+Trailing-window SKU productivity model.
 
-`REPO_MAP.md`
-This document.
+`fct_replenishment_forecast`  
+Baseline replenishment recommendation model.
 
----
+`dim_store`  
+Current-state store dimension.
 
-scripts/
+`dim_item`  
+Current-state item dimension.
 
-Automation and workflow helper scripts for setup/bootstrap and local workflows.
+`dim_item_business_history`  
+Final historical item dimension for analyst-facing business use.
 
----
+`int_item_business_history`  
+Historical version construction from business-date change points.
 
-logs/
-
-Runtime/query logs for local diagnostics and troubleshooting.
-
----
-
-.venv/
-
-Local Python virtual environment (not tracked in Git).
+`int_item_business_pricing_history`  
+Historical pricing, package normalization, and price-position derivation.
 
 ---
 
-Current Project State
+## How To Read The Repo
 
-The repository is beyond scaffold stage and currently supports:
+If you are new to the project, the fastest path is:
 
-Completed:
-- ingestion with parameterized date-window loading
-- dbt layered modeling (staging -> intermediate -> marts)
-- atomic and aggregated fact models
-- Type 1 current-state dimensions backed by Type 2 snapshots
-- custom data quality tests (business rules, grain, reconciliation, completeness)
-- return-aware data quality policy for sales sign handling
-- anomalous returns monitoring model for rare positive RINV rows
-- SKU velocity hardening to exclude returns from trailing-window ranking logic
-- source freshness checks
-- pipeline health model
-- parameterized pipeline execution in `run.sh`
-- notebook exposures and centralized dbt column docs
-
-Near-term roadmap:
-- expand historical coverage through 2023 windows
-- operationalize weekly warning/anomaly monitoring checks
-- continue enrichment roadmap (chain category, SKU planning tiers)
-- scheduling hardening and alerting once backfill cadence is stable
-
----
-
-Design Principles
-
-This repository is structured around:
-- explicit grain and model contracts
-- reproducible environments and deterministic workflows
-- validation-first iteration
-- minimal drift between code, docs, and operations
-- long-term maintainability and operational clarity
+1. Read [`README.md`](../README.md)
+2. Look at the primary marts in `dbt/models/marts/`
+3. Review the flagship notebook in `notebooks/01_category_growth_analysis.ipynb`
+4. Inspect `analysis/sql/` and `analysis/python/` to see how notebook logic is externalized

@@ -1,5 +1,13 @@
 # Project Start Notes
 
+These are the original guardrails captured early in the project.
+
+They are still useful for grounding the system design, but they are not the current source of truth for repo structure or implementation details.
+
+For the current architecture and operating model, use:
+- `README.md` for business framing, architecture, and current-state behavior
+- `docs/REPO_MAP.md` for repository structure and component purpose
+
 - Grain:
 	- Atomic fact grain is `invoice_item_number` in `fct_liquor_sales`.
 	- Aggregated grains include store-day (`fct_store_daily_sales`) and SKU-level trailing windows (`fct_sku_velocity`).
@@ -17,7 +25,6 @@
 	- `assert_retail_gte_cost` remains warn-only and is tracked with threshold-based monitoring.
 
 - Current roadmap focus:
-	- Continue 2023 historical backfill windows.
+	- Maintain and extend historical coverage beyond 2025 as new source data becomes available.
 	- Keep enrichment-first development (chain categorization, SKU planning tiers).
-	- Add scheduling and alerting after backfill/monitoring is consistently stable.
-
+	- Add scheduling and alerting after monitoring and run cadence are consistently stable.

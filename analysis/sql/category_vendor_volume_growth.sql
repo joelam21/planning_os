@@ -1,3 +1,29 @@
+/*
+  category_vendor_volume_growth.sql
+  -------------------------------------------------------
+  Purpose:
+    Produces vendor and bottle-volume growth views for a selected category_name,
+    including month, trailing-3-month, and trailing-12-month sales with YoY deltas,
+    plus subtotal and grand-total grouping-set rows.
+
+  Parameters:
+    month_start: Anchor month (YYYY-MM-01) used to build month/T3M/T12M windows.
+    category_name: Category filter for vendor-volume analysis.
+    vendor_number_filter: CSV vendor filter list or ALL for no vendor filtering.
+    bottle_volume_ml_filter: CSV bottle-volume filter list or ALL for no volume filtering.
+    database: Database containing marts and dimensions referenced in the query.
+    schema: Schema containing fct_liquor_sales and dim_item.
+
+  Returns:
+    Grain varies by row_type: detail (category_name, vendor_number, vendor_name,
+    bottle_volume_ml), vendor subtotal, bottle-volume subtotal, category subtotal,
+    and grand total.
+    Key columns include sales_month, sales_t3m, sales_t12m and corresponding YoY percentages.
+
+  Used by:
+    notebooks/01_category_growth_analysis.ipynb
+*/
+
 with params as (
   select
     to_date('{month_start}') as month_start,
@@ -43,8 +69,8 @@ base_filtered as (
     coalesce(cast(d.bottle_volume_ml as varchar), 'Unknown Bottle Volume') as bottle_volume_ml,
     f.order_date,
     f.sale_dollars
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join params p
   where d.category_name = p.category_name

@@ -2,7 +2,6 @@ with params as (
   select
     to_date('{month_start}') as month_start,
     '{category_family}' as category_family,
-    '{package_size_tier}' as package_size_tier,
     {trend_years} as trend_years
 ),
 periods as (
@@ -23,13 +22,7 @@ base_filtered as (
     p.period_order,
     year(p.anchor_month_start) as period_year,
     h.category_family,
-    case
-      when h.price_position_segment in ('budget', 'standard') then 'budget_standard'
-      when h.price_position_segment in ('premium', 'super_premium', 'ultra_premium', 'luxury', 'icon_collectible') then 'premium_plus'
-      when h.price_position_segment in ('premium_bulk', 'value_oversized', 'bundle_pack') then 'bulk_or_bundle'
-      when h.price_position_segment in ('trial_value', 'trial_premium', 'trial_luxury') then 'trial_size'
-      else h.price_position_segment
-    end as price_position_segment,
+    coalesce(s.store_channel, 'Unknown') as store_channel,
     coalesce(cast(h.vendor_number as varchar), 'Unknown Vendor Number') as vendor_number,
     coalesce(h.vendor_name, 'Unknown Vendor') as vendor_name,
     f.sale_dollars,
@@ -39,15 +32,13 @@ base_filtered as (
     on f.item_number = h.item_number
    and f.order_date >= h.business_valid_from
    and (h.business_valid_to is null or f.order_date <= h.business_valid_to)
+  left join {database}.{schema}.dim_store s
+    on f.store_number = s.store_number
   join selected_periods p
     on f.order_date >= dateadd(month, -11, p.anchor_month_start)
    and f.order_date < dateadd(month, 1, p.anchor_month_start)
   cross join params x
   where h.category_family = x.category_family
-    and (
-      x.package_size_tier = ''
-      or h.package_size_tier = x.package_size_tier
-    )
 ),
 vendor_names as (
   select
@@ -85,14 +76,14 @@ latest_period_top_vendors as (
   where vpt.period_order = 0
   qualify vendor_rank <= 3
 ),
-segment_sales as (
+channel_sales as (
   select
     b.period_order,
     b.period_year,
     coalesce(t.vendor_number, 'Other') as vendor_number,
     coalesce(t.vendor_name, 'Other Vendors') as vendor_name,
     coalesce(t.vendor_rank, 4) as vendor_rank,
-    b.price_position_segment,
+    b.store_channel,
     sum(b.sale_dollars) as sales_t12m,
     sum(b.bottles_sold) as units_t12m
   from base_filtered b
@@ -106,16 +97,16 @@ select
   vendor_number,
   vendor_name,
   vendor_rank,
-  price_position_segment,
+  store_channel,
   sales_t12m,
   units_t12m,
   case
     when units_t12m = 0 then null
     else round(sales_t12m / units_t12m, 2)
   end as avg_selling_price
-from segment_sales
+from channel_sales
 order by
   period_order desc,
   vendor_rank,
   sales_t12m desc,
-  price_position_segment;
+  store_channel;

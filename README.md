@@ -1,102 +1,92 @@
 # planning_os
 
-## Overview
-`planning_os` is an end-to-end analytics system designed to simulate a production-grade data platform.
+## Business Question
 
-It demonstrates how raw data can be ingested, modeled, and transformed into business insights using a modern data stack:
+Which products are driving the business — and what's getting in the way of seeing it clearly?
 
-- Python (data ingestion)
-- Snowflake (data warehouse)
-- dbt (transformations and modeling)
-- Jupyter (analysis and visualization)
+That question shows up in every retail and CPG context. The answer requires looking at the same data from two angles simultaneously: the market dynamics that determine which vendors and categories are winning, and the operational structure that determines which SKUs are earning their place on the shelf.
 
-The project uses Iowa Liquor Sales data as a working dataset to explore retail purchasing behavior.
+`planning_os` is an end-to-end analytics system built to answer both questions from a single, well-designed data infrastructure — without rebuilding logic for each view.
 
 ---
 
-## Objective
-Build a scalable analytics system that:
+## What This Project Demonstrates
 
-- Ingests external data into a warehouse
-- Models data using dimensional design (facts & dimensions)
-- Applies data quality testing
-- Enables downstream analysis and insight generation
+The system is built on publicly available Iowa Liquor Sales data — 12M+ rows of wholesale transaction data modeled in Snowflake with dbt. Iowa operates as a control state where the government is the wholesaler, making transaction-level data a public record. The analytical approach mirrors how syndicated datasets like Nielsen and Circana are used in category management and planning practice.
+
+## Flagship Analysis: Tequila Market 2021–2025
+
+**Finding:** Diageo moved from #3 to #1 with a +20% CAGR 
+while Bacardi declined at -6% — driven by portfolio depth 
+across premium expressions, not price positioning alone.
+
+![Tequila vendor share donuts](tequila_donut_charts.png)
+
+**Price architecture explains the divergence.**
+Diageo expanded across premium tiers while maintaining ASP. 
+Bacardi concentrated around a single franchise and lost 
+ground on both volume and pricing power simultaneously.
+
+![Tequila price segment stacked bars](tequila_stacked_bar_charts.png)
+
+→ Full analysis: notebooks/01_category_growth_analysis.ipynb
+
+The repo contains three primary analytical artifacts backed by the modeled warehouse:
+
+- `notebooks/01_category_growth_analysis.ipynb` — flagship market dynamics case study covering tequila growth, vendor share shift, price architecture, and channel mix
+- `notebooks/02_sku_velocity_analysis.ipynb` — SKU rationalization and catalog productivity using dual-dimension Pareto classification across volume and revenue
+- `notebooks/03_store_performance_analysis.ipynb` — store and channel productivity analysis across chains, independents, and retail formats
+
+The tequila case study is the clearest end-to-end example, but all three notebooks are powered by reusable SQL templates in `analysis/sql/`, common chart helpers in `analysis/python/charts.py`, and dbt marts rather than notebook-only logic.
 
 ---
 
-## Flagship Use Case: SKU Rationalization and Replenishment Planning
+## Key Findings
 
-This project’s strongest business use case is SKU rationalization: identifying which products drive the majority of statewide volume and revenue, and which products add operational complexity with limited commercial return.
+**Flagship market dynamics:**
+- Tequila was the strongest-performing major spirits category from 2021-2025 even as the broader market softened
+- Diageo's leadership shift was driven by portfolio depth across premium expressions — not price positioning alone
+- Bacardi lost both volume and pricing power simultaneously despite premium positioning — concentration without breadth is a structural liability when the category is moving
+- Category-level premiumization in tequila is driven by the top vendors — the long tail is not premiumizing at the same rate
 
-### Business question
+**Operational planning:**
+- The catalog follows a classic long-tail pattern: a small share of SKUs drives a disproportionate share of statewide volume and revenue
+- Catalog bloat is structural, not marginal — roughly 55-60% of active SKUs sit in the Zombie tier statewide
+- Bloat severity varies significantly by category: Specialty/Other Spirits at 79% Zombie share vs. Vodkas at 45%
+- The Core tier contains at least two meaningfully different planning archetypes requiring different management approaches
 
-If a retailer or distributor had to simplify the active catalog, which SKUs should be protected as core assortment, which should be reviewed, and which likely belong in the long tail?
+**Store and channel structure:**
+- Store performance is heterogeneous across retail formats, with different operating models showing materially different revenue productivity
+- Independent stores remain commercially meaningful as a group even when large chains dominate individual rankings
 
-### Analytical approach
-
-I built a dbt mart that classifies each SKU using a trailing 12-week Pareto analysis across two dimensions:
-- volume contribution
-- revenue contribution
-
-This separates products that are operationally important from products that are financially important, instead of collapsing both questions into a single rank.
-
-Supporting models then extend that analysis into planning workflows:
-- SKU velocity segmentation for assortment and catalog productivity decisions
-- replenishment baseline forecasting for weekly shipment recommendations
-
-### What the model enables
-
-- Identifies the small set of SKUs responsible for the majority of statewide movement
-- Quantifies the long tail of low-productivity items that consume shelf space and working capital
-- Distinguishes between items that are high-volume, high-revenue, or both
-- Creates a bridge from descriptive analytics into operational decision support
-
-### Business takeaway
-
-The catalog follows a classic Pareto pattern: a relatively small share of SKUs drives a disproportionate share of sales, while a long tail of products contributes little volume or revenue.
-
-That makes SKU rationalization a credible operating lever:
-- protect core items that anchor demand
-- review marginal SKUs that add assortment complexity without meaningful payoff
-- use recent depletion patterns to size replenishment more intentionally
-
-### Portfolio value
-
-This use case demonstrates more than dashboarding. It shows an end-to-end workflow:
-- ingest external data
-- model atomic and aggregated facts in Snowflake with dbt
-- apply data tests and historical snapshots
-- translate warehouse models into a planning recommendation
-
-The analysis artifact for this use case lives in `notebooks/02_sku_velocity_analysis.ipynb`, backed by the `fct_sku_velocity` and `fct_replenishment_forecast` marts in dbt.
-
-## Early Findings
-
-- The market shows a classic long-tail catalog pattern: a small share of SKUs drives a disproportionate share of statewide volume and revenue.
-- Store performance is heterogeneous across retail formats, with different operating models showing materially different revenue productivity.
-- Independent stores remain commercially meaningful as a group even when large chains dominate individual rankings.
-- Because the dataset reflects wholesale sell-in rather than consumer sell-through, weekly aggregation is more reliable than daily demand-style interpretation.
-- Negative sales and bottle values observed in late July 2022 were validated as return invoices (RINV-), not transformation errors.
+**Data and system:**
+- Because the dataset reflects wholesale sell-in rather than consumer sell-through, weekly aggregation is more reliable than daily demand-style interpretation
+- Negative sales and bottle values observed in late July 2022 were validated as return invoices (RINV-), not transformation errors
+- The source dataset contains limited native dimensions — category families, store chains, and price position segments were all engineered from the ground up
 
 ---
 
 ## Architecture
 
 ```text
-API → Python Ingestion → Snowflake (RAW)
-     → dbt (staging → intermediate → marts)
-     → Analysis (Jupyter / BI)
+Iowa Liquor Sales API
+    → Python Ingestion (parameterized, batched)
+    → Snowflake RAW schema
+    → dbt (staging → intermediate → marts → snapshots)
+    → Analysis (Jupyter notebooks + reusable chart and SQL layers)
 ```
 
 ### Components
 
-- **Ingestion**: Python-based pipeline with parameterized date ranges and batching
-- **Warehouse**: Snowflake (RAW and DEV schemas)
-- **Transformations**: dbt models
-  - staging → cleaned raw data
-  - intermediate → structured transformations
-  - marts → fact and dimension tables
-- **Analysis**: Jupyter notebooks for exploratory analysis and visualization
+- **Ingestion**: Parameterized Python pipeline with date range control, batch sizing, and Snowflake connection management
+- **Warehouse**: Snowflake with RAW and DEV schemas — raw data preserved for ELT flexibility
+- **Transformations**: dbt project with full model layering
+  - `staging` → views (lightweight, rebuilt on query)
+  - `intermediate` → views (business logic, not persisted)
+  - `marts` → tables (pre-computed for query performance)
+  - `snapshots` → tables (Type 2 SCD history)
+- **Analysis**: Jupyter notebooks backed by reusable SQL templates and Python chart helpers — business logic stays versioned outside notebook cells
+- **CI/CD**: GitHub Actions workflow builds a CI-specific dbt environment, runs staged model execution, snapshots, marts build, singular tests, and source freshness checks
 
 ---
 
@@ -111,7 +101,9 @@ API → Python Ingestion → Snowflake (RAW)
 ### Dimension Tables
 - `dim_store` → Type 1 (current-state), derived from `snap_store`
 - `dim_item` → Type 1 (current-state), derived from `snap_item`
-- `dim_item_business_history` → Type 2 (SCD), item attribute history with business-effective valid_from/to dates and change-point detection
+- `dim_item_business_history` → final analyst-facing Type 2 (SCD) historical item dimension
+- `int_item_business_history` → historical version construction from business-date change points
+- `int_item_business_pricing_history` → package-size normalization, normalized pricing, and price position segmentation
 
 ### Snapshots
 - `snap_store` → Type 2 (SCD), full store attribute history (system-time based)
@@ -119,37 +111,72 @@ API → Python Ingestion → Snowflake (RAW)
 
 ---
 
+## Engineered Dimensions
 
-## Important Data Context
+The Iowa source dataset contains limited native dimensions. Three key dimensions were engineered from the ground up:
 
-This dataset represents **store purchases from the state (wholesale / sell-in)**.
+**Category families** — Iowa data contains granular category codes but no family-level grouping. A curated mapping classifies categories into families (Whiskies, Tequilas, Vodkas, Rum, etc.) enabling market-level analysis.
 
-Implications:
-- Daily data reflects ordering behavior, not consumer demand
-- Missing or low-volume days are expected
-- Weekly or monthly aggregation is more appropriate for analysis
+**Store chains** — Store names in the source data are unstructured. A pattern-based classification identifies chain affiliation (Hy-Vee, Sam's Club, Walmart, etc.) vs. independent stores, enabling channel-level analysis.
 
-Returns handling:
-- Source data includes legitimate return invoices, identified by invoice_item_number starting with RINV-
-- Return rows are typically negative but rare positive reversals/corrections may occur
-- Data quality test ensures negative values only appear on RINV invoices (non-returns cannot be negative)
-- Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` model and monitored periodically; these are rare but preserved in fact table to maintain data lineage
+**Price position segments** — No price tier exists in the source data. A dual-signal classification model uses retail bottle price and price per 100ml to assign each SKU to a price position segment (Value, Standard, Premium, Super Premium, Ultra Premium, Luxury, Icon/Collectible). Bundle packs are excluded from price-per-volume calculations. Sizes between 680-720ml are normalized to 750ml. Trial formats receive separate tier handling. Definitions are consistent with industry convention.
+
+---
+
+## Known Data Limitations and Modeling Decisions
+
+**Sell-in vs. sell-through:** The dataset represents store purchases from the state (wholesale sell-in), not consumer purchases (sell-through). Daily data reflects ordering behavior, not consumer demand. Weekly and monthly aggregation is more appropriate for demand-style analysis. Raw source data is preserved in the PLANNING_OS.RAW schema before transformation, allowing reprocessing from source without re-ingestion.
+
+**Returns handling:** Source data includes legitimate return invoices identified by invoice numbers starting with RINV-. Return rows are typically negative. A custom data quality test (`assert_negative_values_must_be_returns`) ensures negative values only appear on RINV invoices. Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` and monitored periodically — rare but preserved to maintain data lineage.
+
+**Bundle pack exclusion:** Bundle and multi-pack items are excluded from price-per-100ml calculations — a single transaction representing a large pack at an inflated per-unit price would distort the price tier classification. Bundle packs are flagged separately in the historical item dimension and may be grouped into `bulk_or_bundle` in analysis-layer visuals.
+
+**Historical pricing logic:** Item attributes — including price — change over time. The intermediate history and pricing layers capture attribute history with business-effective dating and derive normalized price semantics before exposing them through `dim_item_business_history`, allowing analysis to use the price that was true at the time of each transaction rather than only the current price.
+
+**Duplicate invoice handling:** The intermediate layer deduplicates invoice lines before fact construction — the source occasionally contains duplicate records that would distort aggregations if not removed.
 
 ---
 
 ## Current State
 
-- Parameterized ingestion pipeline running into Snowflake
-- dbt project with staging, intermediate, marts, tests, and snapshots
-- Current-state dimensions built from Type 2 historical snapshots
-- Store performance analysis completed
-- SKU rationalization mart completed
-- Replenishment forecast mart completed
+**Ingestion and warehouse:**
+- Parameterized ingestion pipeline loading source data into PLANNING_OS.RAW
+- Historical coverage extends through 2025 and continues forward as new source data becomes available
+
+**dbt modeling:**
+- Full model layering: staging → intermediate → marts → snapshots
+- Type 2 SCD snapshots for store and item history
+- Current-state Type 1 dimensions derived from snapshots
+- Engineered dimensions: category families, store chains, price position segments
+
+**Data quality:**
 - Return-aware quality policy implemented (`assert_negative_values_must_be_returns`)
-- Anomalous returns monitoring model implemented (`int_anomalous_returns`)
-- Unlabeled negative return anomaly monitoring model implemented (`int_unlabeled_negative_returns`)
-- SKU velocity logic hardened by excluding RINV return rows from the trailing 12-week window
-- Historical data coverage is still being expanded incrementally
+- Anomalous returns monitoring (`int_anomalous_returns`)
+- Unlabeled negative return monitoring (`int_unlabeled_negative_returns`)
+- Grain integrity, reconciliation, and date coverage tests
+- Pipeline health monitoring view (`MON_PIPELINE_HEALTH`)
+- Deduplicated intermediate invoice layer protecting downstream fact grain integrity
+
+**CI and workflow:**
+- GitHub Actions dbt CI workflow builds against a dedicated CI schema
+- CI runs dbt debug, staged model execution, snapshots, marts build, singular tests, and source freshness
+- Curated direct dependencies are tracked in `requirements.txt`; exact environment resolution is preserved in `requirements-lock.txt`
+
+**Analysis:**
+- Category growth and vendor share analysis completed — tequila market 2021-2025
+- SKU rationalization and catalog productivity analysis completed — statewide market
+- Store performance and channel structure analysis completed — chain vs. independent productivity and revenue concentration
+- Reusable chart layer (`analysis/python/charts.py`) and SQL template layer (`analysis/sql/`)
+- Notebook helper utilities (`analysis/python/notebook_helpers.py`)
+
+---
+
+## Next Steps
+
+- Add Airflow orchestration — DAG to automate the weekly ingestion → dbt build → dbt test → monitoring sequence
+- Synthetic demand layer — simulate consumer demand from sell-in patterns to enable inventory position modeling
+- NRF 4-5-4 fiscal calendar dimension — enable period-comparable analysis across the standard retail planning calendar
+- Store-level planning simulation — model replenishment at the store level for a subset of stores across different demand profiles
 
 ---
 
@@ -169,21 +196,44 @@ source ./enter.sh
 ./run.sh dbt-debug
 ```
 
----
+## Dependencies
 
-## Next Steps
-
-- Expand historical coverage through remaining 2023 windows
-- Run warning monitors weekly (`assert_retail_gte_cost`, `assert_negative_values_must_be_returns` + threshold checks)
-- Track anomalous return frequency and impact over time (`int_anomalous_returns`, `int_unlabeled_negative_returns`)
-- Continue value-add enrichment models (chain category, SKU tier strategy, planning marts)
-- Add orchestration and alerting after historical backfill stabilizes
+- `requirements.txt` → curated direct dependencies used to install the project cleanly
+- `requirements-lock.txt` → exact resolved environment for reproducibility
 
 ---
 
-## Repository Structure
+## Canonical Metrics
 
-See: `docs/REPO_MAP.md`
+The repo now defines a small canonical metrics layer in [`dbt/models/docs/metric_definitions.md`](./dbt/models/docs/metric_definitions.md) so the same business metrics are described consistently across models and analyses.
+
+Core metrics include:
+- `sales` → `sum(sale_dollars)`
+- `units` → `sum(bottles_sold)`
+- `avg_selling_price` → `sum(sale_dollars) / sum(bottles_sold)`
+- `gross_profit` → estimated gross profit proxy from sales less bottle cost
+- `share_pct` and `vendor_share` → share-of-total metrics with explicit scope
+- `yoy_growth_pct` and `cagr` → standardized growth-rate definitions for time-window comparisons
+
+These definitions complement reusable column docs in [`dbt/models/docs/column_definitions.md`](./dbt/models/docs/column_definitions.md) and reinforce that business meaning is defined once, then reused across marts, notebooks, and presentation layers.
+
+---
+
+## Quality Gates
+
+The pipeline enforces correctness at every layer:
+
+| Layer | Enforcement |
+|---|---|
+| Source | Freshness checks — WARN >7d, ERROR >14d |
+| Staging | Schema tests — `not_null`, `unique`, `relationships` |
+| Intermediate | Deduplication audit, return-aware sign policy |
+| Marts | Grain integrity, reconciliation, business rules |
+| CI | Staged dbt build across all layers on every push to `dev` |
+
+Full lineage from `RAW_IOWA_LIQUOR` to analytical output is defined in [`dbt/models/exposures.yml`](./dbt/models/exposures.yml).
+
+---
 
 ## Pipeline Health
 
@@ -223,7 +273,9 @@ Use the parameterized pipeline command to run a bounded ingestion window plus sn
   --max-batches 300
 ```
 
-### Dimension Design: Type 1 vs Type 2
+---
+
+## Dimension Design: Type 1 vs Type 2
 
 **Current-state dimensions (Type 1)**
 - `dim_store` → latest known attributes per store, derived from `snap_store`
@@ -242,7 +294,8 @@ Use the parameterized pipeline command to run a bounded ingestion window plus sn
 - you are analyzing trends in entity attributes over time
 - you are auditing how a store or item was classified historically
 
-Example: to join a fact row to the store attributes that were true *at the time of the transaction*:
+Example — joining a fact row to store attributes that were true at the time of the transaction:
+
 ```sql
 select
     f.invoice_item_number,
@@ -257,3 +310,8 @@ left join snap_store s
    and (f.order_date < s.dbt_valid_to or s.dbt_valid_to is null)
 ```
 
+---
+
+## Repository Structure
+
+See: `docs/REPO_MAP.md`

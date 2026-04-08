@@ -190,6 +190,35 @@ models:
       - name: loaded_at
         description: "{{ doc('loaded_at') }}"
 
+  - name: fct_store_daily_sales
+    description: "Store-day aggregate fact table at (order_date, store_number) grain, summing sales, volume, cost, and gross profit from invoice-line facts. Enables chain/channel productivity benchmarking and store-level daily trend analysis without re-aggregating atomic rows."
+    columns:
+      - name: order_date
+        description: "Calendar date for the aggregated store-day record."
+        tests:
+          - not_null
+
+      - name: store_number
+        description: "Store identifier for the aggregated store-day record."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_store')
+                field: store_number
+
+      - name: total_sales_dollars
+        description: "{{ doc('sales') }}"
+
+      - name: total_bottles_sold
+        description: "{{ doc('units') }}"
+
+      - name: total_estimated_gross_profit
+        description: "{{ doc('gross_profit') }}"
+
+      - name: invoice_line_count
+        description: "Count of invoice lines contributing to the store-day aggregate."
+
   - name: fct_sku_velocity
     description: "Trailing-12-week SKU Pareto classification model."
     columns:
@@ -200,7 +229,7 @@ models:
           - unique
 
       - name: sku_tier_volume
-        description: "Pareto tier based on cumulative unit contribution."
+        description: "{{ doc('sku_velocity_tier') }}"
         tests:
           - not_null
           - accepted_values:
@@ -211,7 +240,7 @@ models:
                   - "Tier 3: Zombie (Bottom 5% Volume)"
 
       - name: sku_tier_revenue
-        description: "Pareto tier based on cumulative revenue contribution."
+        description: "{{ doc('sku_velocity_tier') }}"
         tests:
           - not_null
           - accepted_values:
@@ -222,12 +251,12 @@ models:
                   - "Tier 3: Zombie (Bottom 5% Revenue)"
 
       - name: cumulative_volume_pct
-        description: "Running cumulative share of units."
+        description: "{{ doc('share_pct') }}"
         tests:
           - not_null
 
       - name: cumulative_revenue_pct
-        description: "Running cumulative share of revenue."
+        description: "{{ doc('share_pct') }}"
         tests:
           - not_null
 

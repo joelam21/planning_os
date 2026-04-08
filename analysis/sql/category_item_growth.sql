@@ -1,3 +1,27 @@
+/*
+  category_item_growth.sql
+  -------------------------------------------------------
+  Purpose:
+    Ranks item-level sales performance within a selected category_name by comparing
+    current versus prior trailing-12-month sales, with YoY percent change and a
+    grand total row for category-level context.
+
+  Parameters:
+    month_start: Anchor month (YYYY-MM-01) used to build current and prior T12M windows.
+    category_name: Category filter for item-level analysis.
+    vendor_number_filter: CSV vendor filter list or ALL for no vendor filtering.
+    bottle_volume_ml_filter: CSV bottle-volume filter list or ALL for no volume filtering.
+    database: Database containing marts and dimensions referenced in the query.
+    schema: Schema containing fct_liquor_sales and dim_item.
+
+  Returns:
+    Grain is item_name and vendor_name for detail rows, plus one grand total row.
+    Key columns include sales_t12m, sales_prior_t12m, t12m_yoy_pct, and row_type.
+
+  Used by:
+    notebooks/01_category_growth_analysis.ipynb
+*/
+
 with params as (
   select
     to_date('{month_start}') as month_start,
@@ -33,8 +57,8 @@ base_filtered as (
     coalesce(d.vendor_name, 'Unknown Vendor') as vendor_name,
     f.order_date,
     f.sale_dollars
-  from planning_os.dev.fct_liquor_sales f
-  join planning_os.dev.dim_item d
+  from {database}.{schema}.fct_liquor_sales f
+  join {database}.{schema}.dim_item d
     on f.item_number = d.item_number
   cross join params p
   where d.category_name = p.category_name
