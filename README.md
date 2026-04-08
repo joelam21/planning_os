@@ -20,14 +20,14 @@ The system is built on publicly available Iowa Liquor Sales data — 12M+ rows o
 while Bacardi declined at -6% — driven by portfolio depth 
 across premium expressions, not price positioning alone.
 
-![alt text](image.png)
+![Tequila vendor share donuts](tequila_donut_charts.png)
 
 **Price architecture explains the divergence.**
 Diageo expanded across premium tiers while maintaining ASP. 
 Bacardi concentrated around a single franchise and lost 
 ground on both volume and pricing power simultaneously.
 
-![alt text](image-1.png)
+![Tequila price segment stacked bars](tequila_stacked_bar_charts.png)
 
 → Full analysis: notebooks/01_category_growth_analysis.ipynb
 
