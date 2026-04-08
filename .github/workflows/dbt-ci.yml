@@ -101,6 +101,11 @@ jobs:
           dbt snapshot \
             --target ci
 
+      - name: dbt seed
+        run: |
+          dbt seed \
+            --target ci
+
       - name: dbt build — marts layer
         run: |
           dbt build \
