@@ -14,51 +14,36 @@ That question shows up in every retail and CPG context. The answer requires look
 
 The system is built on publicly available Iowa Liquor Sales data — 12M+ rows of wholesale transaction data modeled in Snowflake with dbt. Iowa operates as a control state where the government is the wholesaler, making transaction-level data a public record. The analytical approach mirrors how syndicated datasets like Nielsen and Circana are used in category management and planning practice.
 
-Two analytical use cases answer the core question from different angles:
+## Flagship Analysis: Tequila Market 2021–2025
 
-### Market Dynamics — Category Growth & Vendor Share Analysis
+**Finding:** Diageo moved from #3 to #1 with a +20% CAGR 
+while Bacardi declined at -6% — driven by portfolio depth 
+across premium expressions, not price positioning alone.
 
-**Business question:** Which vendors are winning in the tequila market, why did leadership shift, and what does price architecture reveal about competitive strategy?
+![alt text](image.png)
 
-**Key finding:** Diageo moved from #3 to #1 in tequila between 2021 and 2025 — growing share from 14.6% to 23.4% with a +20% CAGR while Bacardi declined at -6%. The shift wasn't driven by premium positioning alone. It was driven by portfolio depth across expressions and price tiers — a structural advantage that a single-dimension analysis would miss.
+**Price architecture explains the divergence.**
+Diageo expanded across premium tiers while maintaining ASP. 
+Bacardi concentrated around a single franchise and lost 
+ground on both volume and pricing power simultaneously.
 
-**Analytical approach:**
-- Category family performance across the full spirits market
-- Vendor share evolution over a 5-year window
-- Price position segmentation using a dual-signal model — bottle retail price and price per 100ml — with package format handling for bundles and trial sizes
-- Before/after vendor price mix comparison showing how portfolio architecture shifted
-- Item-level and chain-level drill-down
+![alt text](image-1.png)
 
-**What makes it sophisticated:** The price tier dimension was engineered from scratch — the source data contains no native price classification. A dual-signal model classifies each SKU across retail price and normalized price-per-volume, with separate handling for bundle packs, trial formats, and size normalization. Tier definitions are consistent with industry convention (Value, Standard, Premium, Super Premium, Ultra Premium, Luxury).
+→ Full analysis: notebooks/01_category_growth_analysis.ipynb
 
-→ `notebooks/01_category_growth_analysis.ipynb`
-→ Backed by `dim_item_business_history`, which is exposed from intermediate historical pricing logic, and parameterized SQL templates in `analysis/sql/`
+The repo contains three primary analytical artifacts backed by the modeled warehouse:
 
----
+- `notebooks/01_category_growth_analysis.ipynb` — flagship market dynamics case study covering tequila growth, vendor share shift, price architecture, and channel mix
+- `notebooks/02_sku_velocity_analysis.ipynb` — SKU rationalization and catalog productivity using dual-dimension Pareto classification across volume and revenue
+- `notebooks/03_store_performance_analysis.ipynb` — store and channel productivity analysis across chains, independents, and retail formats
 
-### Operational Planning — SKU Rationalization & Catalog Productivity
-
-**Business question:** Which SKUs should be protected as core assortment, which should be reviewed, and which belong in the long tail?
-
-**Key finding:** The Iowa liquor catalog follows a classic Pareto pattern — approximately 14-16% of active SKUs drive 80% of both volume and revenue. But the more interesting finding is in the divergence: the Core tier is not homogeneous. It contains true anchors with stable, predictable demand and fragile premium items whose revenue contribution is real but concentrated in very few transactions. Treating them the same in a replenishment or ranging framework produces systematically wrong decisions.
-
-**Analytical approach:**
-- Dual-dimension Pareto classification — volume and revenue independently, not collapsed into a single rank
-- Tier alignment matrix showing where volume and revenue tiers agree and where they diverge
-- Item-level detail for the most analytically complex cells — including three distinct planning archetypes within the Core revenue / Zombie volume cell
-- Category family breakdown showing catalog bloat is market-wide but severity varies significantly by category
-- Full catalog scatter visualization on a log scale — showing the underlying power law distribution that the Pareto analysis quantifies
-
-**What makes it sophisticated:** The dual-dimension approach separates operational importance from commercial importance — a distinction that matters for ranging and replenishment decisions. The tier alignment matrix surfaces the off-diagonal cells where individual judgment is required rather than systematic rules. The grain-aware interpretation recognizes that some classifications are data artifacts of the wholesale sell-in structure rather than genuine demand signals.
-
-→ `notebooks/02_sku_velocity_analysis.ipynb`
-→ Backed by `fct_sku_velocity` and `fct_replenishment_forecast` marts in dbt
+The tequila case study is the clearest end-to-end example, but all three notebooks are powered by reusable SQL templates in `analysis/sql/`, common chart helpers in `analysis/python/charts.py`, and dbt marts rather than notebook-only logic.
 
 ---
 
 ## Key Findings
 
-**Market dynamics:**
+**Flagship market dynamics:**
 - Tequila was the strongest-performing major spirits category from 2021-2025 even as the broader market softened
 - Diageo's leadership shift was driven by portfolio depth across premium expressions — not price positioning alone
 - Bacardi lost both volume and pricing power simultaneously despite premium positioning — concentration without breadth is a structural liability when the category is moving
@@ -69,6 +54,8 @@ Two analytical use cases answer the core question from different angles:
 - Catalog bloat is structural, not marginal — roughly 55-60% of active SKUs sit in the Zombie tier statewide
 - Bloat severity varies significantly by category: Specialty/Other Spirits at 79% Zombie share vs. Vodkas at 45%
 - The Core tier contains at least two meaningfully different planning archetypes requiring different management approaches
+
+**Store and channel structure:**
 - Store performance is heterogeneous across retail formats, with different operating models showing materially different revenue productivity
 - Independent stores remain commercially meaningful as a group even when large chains dominate individual rankings
 
@@ -187,7 +174,6 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 ## Next Steps
 
 - Add Airflow orchestration — DAG to automate the weekly ingestion → dbt build → dbt test → monitoring sequence
-- Expand CI beyond `dbt parse` — add `dbt build` against a CI-specific schema with slim invocation
 - Synthetic demand layer — simulate consumer demand from sell-in patterns to enable inventory position modeling
 - NRF 4-5-4 fiscal calendar dimension — enable period-comparable analysis across the standard retail planning calendar
 - Store-level planning simulation — model replenishment at the store level for a subset of stores across different demand profiles
@@ -214,6 +200,38 @@ source ./enter.sh
 
 - `requirements.txt` → curated direct dependencies used to install the project cleanly
 - `requirements-lock.txt` → exact resolved environment for reproducibility
+
+---
+
+## Canonical Metrics
+
+The repo now defines a small canonical metrics layer in [`dbt/models/docs/metric_definitions.md`](./dbt/models/docs/metric_definitions.md) so the same business metrics are described consistently across models and analyses.
+
+Core metrics include:
+- `sales` → `sum(sale_dollars)`
+- `units` → `sum(bottles_sold)`
+- `avg_selling_price` → `sum(sale_dollars) / sum(bottles_sold)`
+- `gross_profit` → estimated gross profit proxy from sales less bottle cost
+- `share_pct` and `vendor_share` → share-of-total metrics with explicit scope
+- `yoy_growth_pct` and `cagr` → standardized growth-rate definitions for time-window comparisons
+
+These definitions complement reusable column docs in [`dbt/models/docs/column_definitions.md`](./dbt/models/docs/column_definitions.md) and reinforce that business meaning is defined once, then reused across marts, notebooks, and presentation layers.
+
+---
+
+## Quality Gates
+
+The pipeline enforces correctness at every layer:
+
+| Layer | Enforcement |
+|---|---|
+| Source | Freshness checks — WARN >7d, ERROR >14d |
+| Staging | Schema tests — `not_null`, `unique`, `relationships` |
+| Intermediate | Deduplication audit, return-aware sign policy |
+| Marts | Grain integrity, reconciliation, business rules |
+| CI | Staged dbt build across all layers on every push to `dev` |
+
+Full lineage from `RAW_IOWA_LIQUOR` to analytical output is defined in [`dbt/models/exposures.yml`](./dbt/models/exposures.yml).
 
 ---
 

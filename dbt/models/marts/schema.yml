@@ -208,13 +208,13 @@ models:
                 field: store_number
 
       - name: total_sales_dollars
-        description: "Total sale_dollars summed across all invoice lines for the store and date."
+        description: "{{ doc('sales') }}"
 
       - name: total_bottles_sold
-        description: "Total bottles_sold summed across all invoice lines for the store and date."
+        description: "{{ doc('units') }}"
 
       - name: total_estimated_gross_profit
-        description: "Total estimated gross profit summed across all invoice lines for the store and date."
+        description: "{{ doc('gross_profit') }}"
 
       - name: invoice_line_count
         description: "Count of invoice lines contributing to the store-day aggregate."
@@ -229,7 +229,7 @@ models:
           - unique
 
       - name: sku_tier_volume
-        description: "Pareto tier based on cumulative unit contribution."
+        description: "{{ doc('sku_velocity_tier') }}"
         tests:
           - not_null
           - accepted_values:
@@ -240,7 +240,7 @@ models:
                   - "Tier 3: Zombie (Bottom 5% Volume)"
 
       - name: sku_tier_revenue
-        description: "Pareto tier based on cumulative revenue contribution."
+        description: "{{ doc('sku_velocity_tier') }}"
         tests:
           - not_null
           - accepted_values:
@@ -251,12 +251,12 @@ models:
                   - "Tier 3: Zombie (Bottom 5% Revenue)"
 
       - name: cumulative_volume_pct
-        description: "Running cumulative share of units."
+        description: "{{ doc('share_pct') }}"
         tests:
           - not_null
 
       - name: cumulative_revenue_pct
-        description: "Running cumulative share of revenue."
+        description: "{{ doc('share_pct') }}"
         tests:
           - not_null
 
