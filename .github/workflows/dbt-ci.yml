@@ -84,15 +84,15 @@ jobs:
       - name: dbt debug
         run: dbt debug --target ci
 
-      - name: dbt build — staging layer
+      - name: dbt run — staging layer
         run: |
-          dbt build \
+          dbt run \
             --select staging \
             --target ci
 
-      - name: dbt build — intermediate layer
+      - name: dbt run — intermediate layer
         run: |
-          dbt build \
+          dbt run \
             --select +int \
             --target ci
 
