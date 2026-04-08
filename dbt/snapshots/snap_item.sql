@@ -2,7 +2,7 @@
 
 {{
     config(
-        target_schema='DEV',
+        target_schema=target.schema,
         unique_key='item_number',
         strategy='check',
         check_cols=[

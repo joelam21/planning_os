@@ -96,6 +96,11 @@ jobs:
             --select +int \
             --target ci
 
+      - name: dbt snapshot
+        run: |
+          dbt snapshot \
+            --target ci
+
       - name: dbt build — marts layer
         run: |
           dbt build \
