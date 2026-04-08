@@ -17,7 +17,7 @@
 	- `assert_retail_gte_cost` remains warn-only and is tracked with threshold-based monitoring.
 
 - Current roadmap focus:
-	- Continue 2023 historical backfill windows.
+	- Maintain and extend historical coverage beyond 2025 as new source data becomes available.
 	- Keep enrichment-first development (chain categorization, SKU planning tiers).
-	- Add scheduling and alerting after backfill/monitoring is consistently stable.
+	- Add scheduling and alerting after monitoring and run cadence are consistently stable.
 

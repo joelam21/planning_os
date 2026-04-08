@@ -149,7 +149,7 @@ Returns handling:
 - Anomalous returns monitoring model implemented (`int_anomalous_returns`)
 - Unlabeled negative return anomaly monitoring model implemented (`int_unlabeled_negative_returns`)
 - SKU velocity logic hardened by excluding RINV return rows from the trailing 12-week window
-- Historical data coverage is still being expanded incrementally
+- Historical coverage extends through 2025 and continues forward as new source data becomes available
 
 ---
 
@@ -173,11 +173,11 @@ source ./enter.sh
 
 ## Next Steps
 
-- Expand historical coverage through remaining 2023 windows
+- Maintain current historical coverage and extend it as newer source periods are released
 - Run warning monitors weekly (`assert_retail_gte_cost`, `assert_negative_values_must_be_returns` + threshold checks)
 - Track anomalous return frequency and impact over time (`int_anomalous_returns`, `int_unlabeled_negative_returns`)
 - Continue value-add enrichment models (chain category, SKU tier strategy, planning marts)
-- Add orchestration and alerting after historical backfill stabilizes
+- Add orchestration and alerting after monitoring and operational cadence stabilize
 
 ---
 

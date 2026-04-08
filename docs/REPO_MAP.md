@@ -103,10 +103,16 @@ notebooks/
 Exploratory analysis and validation notebooks.
 
 `01_store_performance_analysis.ipynb`
-Primary analysis notebook for market structure and store productivity.
+Exploratory notebook for market structure and store productivity.
+
+`02_sku_velocity_analysis.ipynb`
+Primary analysis notebook for SKU rationalization, catalog productivity, and inventory velocity.
+
+`03_category_growth_analysis.ipynb`
+Primary analysis notebook for tequila category growth, vendor share shifts, and price segment mix.
 
 `query_exploration_notebook.ipynb`
-Ad hoc validation and exploration notebook (including pipeline health checks).
+Ad hoc validation and local exploration notebook (including pipeline health checks); not intended as a shared analysis artifact.
 
 ---
 
@@ -162,10 +168,10 @@ Completed:
 - notebook exposures and centralized dbt column docs
 
 Near-term roadmap:
-- expand historical coverage through 2023 windows
+- maintain current historical coverage through 2025+ and extend it as newer source data becomes available
 - operationalize weekly warning/anomaly monitoring checks
 - continue enrichment roadmap (chain category, SKU planning tiers)
-- scheduling hardening and alerting once backfill cadence is stable
+- scheduling hardening and alerting once monitoring cadence is stable
 
 ---
 
