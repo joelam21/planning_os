@@ -1,21 +1,39 @@
 /*
-  planning_os_roles.sql
+  snowflake_objects.sql
   -------------------------------------------------------
   Purpose:
-    Role and privilege setup for the planning_os project.
-    Run as ACCOUNTADMIN to create roles and grant 
-    appropriate privileges following least-privilege 
-    principles.
+    Creates the Snowflake infrastructure required to run
+    the planning_os project — warehouse, database, and
+    schemas. Run as SYSADMIN or ACCOUNTADMIN before
+    running snowflake_roles.sql or the ingestion pipeline.
 
-  Roles created:
-    PLANNING_OS_ADMIN  — full DDL and DML on all schemas
-    PLANNING_OS_DEV    — development access (DEV schema)
-    PLANNING_OS_CI     — CI/CD access (CI schema only)
-    PLANNING_OS_READ   — read-only access for analysts
+  Current implementation note:
+    The ingestion pipeline currently loads source data
+    directly into the DEV schema. The RAW schema below
+    reflects the intended production architecture where
+    raw source data lands separately before dbt
+    transformation. Separating RAW and DEV enforces
+    ELT boundaries more strictly and is a documented
+    next step for this project.
 
-  Usage:
-    Run sections in order. Verify with SHOW GRANTS 
-    after each section.
+  Schemas created:
+    PLANNING_OS.RAW  — intended landing zone for raw 
+                       source data before transformation
+    PLANNING_OS.DEV  — dbt transformation output
+                       (staging, intermediate, marts)
+    PLANNING_OS.CI   — isolated schema for CI/CD runs
+
+  Run order:
+    1. snowflake_objects.sql  (this file)
+    2. snowflake_roles.sql    (role and privilege setup)
+    3. dbt debug              (validate dbt connection)
+    4. run.sh pipeline        (ingestion and transformation)
+
+  Notes:
+    - IF NOT EXISTS guards make this script safe to re-run
+    - Warehouse auto-suspend is set to 60 seconds for
+      cost efficiency on a development account
+    - Adjust warehouse size and retention for production
 */
 
 -- =====================================================
