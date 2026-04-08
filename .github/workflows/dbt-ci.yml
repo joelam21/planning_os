@@ -93,7 +93,7 @@ jobs:
       - name: dbt build — intermediate layer
         run: |
           dbt build \
-            --select int \
+            --select +int \
             --target ci
 
       - name: dbt build — marts layer
