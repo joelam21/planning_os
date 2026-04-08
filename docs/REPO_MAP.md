@@ -28,10 +28,16 @@ Primary task runner for project workflows. Supports:
 Environment diagnostics and setup validation.
 
 `requirements.txt`
-Pinned Python and dbt-related dependencies.
+Curated direct Python and dbt-related dependencies for normal installation.
+
+`requirements-lock.txt`
+Exact pinned dependency set used to reproduce a known working environment.
 
 `README.md`
 Project overview, business use cases, architecture, key findings, known data limitations, and pipeline health criteria.
+
+`.github/workflows/dbt-ci.yml`
+GitHub Actions workflow that validates dbt in an isolated CI schema via debug, staged runs, snapshots, marts build, singular tests, and source freshness.
 
 ---
 
@@ -52,7 +58,8 @@ Transformation and semantic modeling layer.
 - `int_iowa_liquor_sales.sql` — cleaned sales with return handling
 - `int_iowa_liquor_sales_deduped.sql` — deduplicated invoice lines
 - `int_iowa_liquor_sales_duplicate_audit.sql` — audit model for duplicate detection
-- `int_item_business_history.sql` — item attribute history with business-effective dating and price position segmentation
+- `int_item_business_history.sql` — historical item attribute versioning with business-effective dating and change-point detection
+- `int_item_business_pricing_history.sql` — package-size normalization, normalized pricing, and price position segmentation layered on historical item versions
 - `int_store_attributes.sql` — store attributes with chain classification
 - `int_anomalous_returns.sql` — monitoring model for positive RINV records
 - `int_unlabeled_negative_returns.sql` — monitoring model for unlabeled negative rows
@@ -69,7 +76,7 @@ Transformation and semantic modeling layer.
 **Dimension tables:**
 - `dim_store` — Type 1 current-state, derived from `snap_store`
 - `dim_item` — Type 1 current-state, derived from `snap_item`
-- `dim_item_business_history` — Type 2 SCD, item attribute history with business-effective valid_from/to dates, change-point detection, and price position segmentation
+- `dim_item_business_history` — final analyst-facing Type 2 historical item dimension exposed from the intermediate pricing/history layer
 
 `schema.yml` — model-level metadata, column documentation, and tests
 
@@ -131,6 +138,8 @@ Key templates include:
 - `category_family_vendor_store_channel_mix.sql` — vendor revenue breakdown by store channel within a family
 - `category_family_vendor_store_channel_mix_compare.sql` — before/after store channel mix comparison by vendor
 - `category_name_vendor_monthly_trend.sql` — monthly vendor revenue trend within a specific category name
+- `store_chain_performance.sql` — store-level chain performance and productivity
+- `store_channel_performance.sql` — store channel structure and revenue concentration
 
 ### analysis/python/
 - `charts.py` — reusable chart functions for all analysis notebooks. Functions handle title formatting, color palette, legend placement, axis scaling, and annotation consistently across charts.
@@ -221,13 +230,16 @@ Local Python virtual environment (not tracked in Git).
 - Engineered dimensions: category families, store chains, price position segments
 - Custom data quality tests: business rules, grain integrity, reconciliation, date completeness
 - Return-aware data quality policy for sales sign handling
+- Deduplicated intermediate invoice layer protecting fact grain integrity
 - Anomalous returns monitoring for rare positive RINV rows
 - SKU velocity hardening to exclude returns from trailing-window ranking logic
 - Source freshness checks and pipeline health monitoring model
 - Parameterized pipeline execution via `run.sh`
+- GitHub Actions dbt CI workflow using an isolated CI schema
 - Notebook exposures and centralized dbt column documentation
 - Category growth and vendor share analysis — tequila market 2021-2025
 - SKU rationalization and catalog productivity analysis — statewide market
+- Store performance and channel structure analysis — chain vs. independent revenue productivity
 - Reusable chart and SQL template layers backing all primary analysis notebooks
 
 **Next steps:**

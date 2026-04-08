@@ -32,7 +32,7 @@ Two analytical use cases answer the core question from different angles:
 **What makes it sophisticated:** The price tier dimension was engineered from scratch — the source data contains no native price classification. A dual-signal model classifies each SKU across retail price and normalized price-per-volume, with separate handling for bundle packs, trial formats, and size normalization. Tier definitions are consistent with industry convention (Value, Standard, Premium, Super Premium, Ultra Premium, Luxury).
 
 → `notebooks/01_category_growth_analysis.ipynb`
-→ Backed by `dim_item_business_history` and parameterized SQL templates in `analysis/sql/`
+→ Backed by `dim_item_business_history`, which is exposed from intermediate historical pricing logic, and parameterized SQL templates in `analysis/sql/`
 
 ---
 
@@ -99,6 +99,7 @@ Iowa Liquor Sales API
   - `marts` → tables (pre-computed for query performance)
   - `snapshots` → tables (Type 2 SCD history)
 - **Analysis**: Jupyter notebooks backed by reusable SQL templates and Python chart helpers — business logic stays versioned outside notebook cells
+- **CI/CD**: GitHub Actions workflow builds a CI-specific dbt environment, runs staged model execution, snapshots, marts build, singular tests, and source freshness checks
 
 ---
 
@@ -113,9 +114,9 @@ Iowa Liquor Sales API
 ### Dimension Tables
 - `dim_store` → Type 1 (current-state), derived from `snap_store`
 - `dim_item` → Type 1 (current-state), derived from `snap_item`
-- `dim_item_business_history` → Type 2 (SCD), item attribute history 
-  with business-effective valid_from/to dates, change-point detection, 
-  and price position segmentation
+- `dim_item_business_history` → final analyst-facing Type 2 (SCD) historical item dimension
+- `int_item_business_history` → historical version construction from business-date change points
+- `int_item_business_pricing_history` → package-size normalization, normalized pricing, and price position segmentation
 
 ### Snapshots
 - `snap_store` → Type 2 (SCD), full store attribute history (system-time based)
@@ -141,9 +142,9 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 
 **Returns handling:** Source data includes legitimate return invoices identified by invoice numbers starting with RINV-. Return rows are typically negative. A custom data quality test (`assert_negative_values_must_be_returns`) ensures negative values only appear on RINV invoices. Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` and monitored periodically — rare but preserved to maintain data lineage.
 
-**Bundle pack exclusion:** Bundle and multi-pack items are excluded from price-per-100ml calculations — a single transaction representing a large pack at an inflated per-unit price would distort the price tier classification. Bundle packs receive a separate `bulk_or_bundle` classification.
+**Bundle pack exclusion:** Bundle and multi-pack items are excluded from price-per-100ml calculations — a single transaction representing a large pack at an inflated per-unit price would distort the price tier classification. Bundle packs are flagged separately in the historical item dimension and may be grouped into `bulk_or_bundle` in analysis-layer visuals.
 
-**Historical pricing logic:** Item attributes — including price — change over time. The `dim_item_business_history` model captures attribute history with business-effective dating, allowing analysis to use the price that was true at the time of each transaction rather than only the current price.
+**Historical pricing logic:** Item attributes — including price — change over time. The intermediate history and pricing layers capture attribute history with business-effective dating and derive normalized price semantics before exposing them through `dim_item_business_history`, allowing analysis to use the price that was true at the time of each transaction rather than only the current price.
 
 **Duplicate invoice handling:** The intermediate layer deduplicates invoice lines before fact construction — the source occasionally contains duplicate records that would distort aggregations if not removed.
 
@@ -167,10 +168,17 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 - Unlabeled negative return monitoring (`int_unlabeled_negative_returns`)
 - Grain integrity, reconciliation, and date coverage tests
 - Pipeline health monitoring view (`MON_PIPELINE_HEALTH`)
+- Deduplicated intermediate invoice layer protecting downstream fact grain integrity
+
+**CI and workflow:**
+- GitHub Actions dbt CI workflow builds against a dedicated CI schema
+- CI runs dbt debug, staged model execution, snapshots, marts build, singular tests, and source freshness
+- Curated direct dependencies are tracked in `requirements.txt`; exact environment resolution is preserved in `requirements-lock.txt`
 
 **Analysis:**
 - Category growth and vendor share analysis completed — tequila market 2021-2025
 - SKU rationalization and catalog productivity analysis completed — statewide market
+- Store performance and channel structure analysis completed — chain vs. independent productivity and revenue concentration
 - Reusable chart layer (`analysis/python/charts.py`) and SQL template layer (`analysis/sql/`)
 - Notebook helper utilities (`analysis/python/notebook_helpers.py`)
 
@@ -201,6 +209,11 @@ source ./enter.sh
 # Validate dbt configuration
 ./run.sh dbt-debug
 ```
+
+## Dependencies
+
+- `requirements.txt` → curated direct dependencies used to install the project cleanly
+- `requirements-lock.txt` → exact resolved environment for reproducibility
 
 ---
 

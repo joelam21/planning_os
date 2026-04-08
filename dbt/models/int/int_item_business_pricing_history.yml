@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: int_item_business_pricing_history
+    description: "Intermediate historical item pricing model layered on business-effective item history. Owns category family enrichment, package-size normalization, normalized price metrics, and price position segmentation before the final mart exposes the fields."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+
+      - name: business_valid_from
+        description: "Business date when this priced attribute version first appears."
+        tests:
+          - not_null
+
+      - name: category_family
+        description: "Broad category family mapped from category/category_name for historical versions."
+
+      - name: is_bundle_pack
+        description: "True when item_description suggests a multipack, tray pack, gift set, sampler, or similar bundle."
+
+      - name: effective_bottle_volume_ml
+        description: "Bottle volume used for normalized pricing; 700ml formats are normalized to 750ml."
+
+      - name: package_size_tier
+        description: "Intermediate package size class based on bottle volume."
+
+      - name: price_per_100ml
+        description: "Historical retail price normalized to 100ml for cross-size comparison."
+
+      - name: retail_price_tier
+        description: "Historical bottle-retail price band used for broad price positioning."
+
+      - name: price_per_100ml_tier
+        description: "Historical normalized price band based on price_per_100ml."
+
+      - name: normalized_price_tier
+        description: "Alias for price_per_100ml_tier."
+
+      - name: price_position_segment
+        description: "Intermediate strategic price segment derived from bottle price, normalized price, and package size."
