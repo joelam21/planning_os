@@ -14,7 +14,7 @@ select
     'unlabeled_negative_return' as anomaly_type,
     loaded_at
 
-from {{ ref('fct_liquor_sales') }}
+from {{ ref('int_iowa_liquor_sales_deduped') }}
 
 where
     (
