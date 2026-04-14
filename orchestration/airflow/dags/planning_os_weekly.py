@@ -13,11 +13,11 @@ DEFAULT_SOURCE = "iowa_liquor"
 
 def compute_run_window(**context) -> None:
     """
-    Compute a default weekly ingestion window.
+    Compute a default rolling ingestion window.
 
     Default behavior:
     - If start_date and end_date are provided in dag_run.conf, use them.
-    - Otherwise use the last full Monday-Sunday week in UTC.
+    - Otherwise use a rolling 90-day window ending yesterday in UTC.
 
     Stores values in XCom for downstream tasks.
     """
@@ -31,16 +31,15 @@ def compute_run_window(**context) -> None:
     else:
         now = pendulum.now("UTC")
 
-        # Start of current week (Monday 00:00 UTC)
-        current_week_start = now.start_of("week")
+        # Use yesterday as the end of the window to avoid partial current-day data
+        end = now.subtract(days=1).start_of("day")
 
-        # Last full week: Monday through Sunday
-        last_week_start = current_week_start.subtract(weeks=1)
-        last_week_end = current_week_start.subtract(days=1)
+        # Rolling 90-day window (inclusive)
+        start = end.subtract(days=89)
 
-        start_date = last_week_start.to_date_string()
-        end_date = last_week_end.to_date_string()
-        window_mode = "default_last_full_week"
+        start_date = start.to_date_string()
+        end_date = end.to_date_string()
+        window_mode = "default_last_90_days"
 
     source = conf.get("source", DEFAULT_SOURCE)
 
@@ -82,7 +81,7 @@ with DAG(
           --start-date {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }} \
           --end-date {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }} \
           --batch-size 1000 \
-          --max-batches 300
+          --max-batches 2000
         """,
     )
 

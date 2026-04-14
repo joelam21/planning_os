@@ -173,7 +173,7 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 
 ## Next Steps
 
-- Add Airflow orchestration — DAG to automate the weekly ingestion → dbt build → dbt test → monitoring sequence
+- Harden Airflow orchestration — expand the weekly DAG into a production-ready workflow with stronger runtime validation, alerting, and operational monitoring
 - Synthetic demand layer — simulate consumer demand from sell-in patterns to enable inventory position modeling
 - NRF 4-5-4 fiscal calendar dimension — enable period-comparable analysis across the standard retail planning calendar
 - Store-level planning simulation — model replenishment at the store level for a subset of stores across different demand profiles
@@ -200,6 +200,13 @@ source ./enter.sh
 
 - `requirements.txt` → curated direct dependencies used to install the project cleanly
 - `requirements-lock.txt` → exact resolved environment for reproducibility
+
+## Airflow Runtime Notes
+
+- Airflow uses a custom Docker image at `orchestration/airflow/Dockerfile`
+- The dbt profile is mounted at `/opt/airflow/.dbt`
+- Airflow credentials are sourced from the repository root `.env`
+- Airflow runtime dependencies are intentionally minimal and defined in `orchestration/airflow/requirements-airflow.txt`
 
 ---
 

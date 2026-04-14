@@ -1,9 +1,11 @@
-version: "3.8"
-
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.10.5
+  build:
+    context: ../..
+    dockerfile: orchestration/airflow/Dockerfile
+  image: planning_os_airflow:2.10.5
   env_file:
     - .env
+    - ../../.env
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
@@ -12,10 +14,13 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__WEBSERVER__SECRET_KEY: "dev_secret_key"
     AIRFLOW_UID: "50000"
+    DBT_PROJECT_DIR: /opt/planning_os
+    DBT_PROFILES_DIR: /opt/airflow/.dbt
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./config:/opt/airflow/.dbt:ro
     - ../..:/opt/planning_os
   depends_on:
     postgres:
