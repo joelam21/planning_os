@@ -1,0 +1,91 @@
+version: 2
+
+models:
+  - name: int_sku_velocity_base_12wk
+    description: "Intermediate trailing-12-week SKU aggregation used as the canonical velocity base before ranking and tier classification. Grain is one row per item_number across the active 12-week lookback window."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+
+      - name: total_units_sold
+        description: "{{ doc('units') }}"
+        tests:
+          - not_null
+
+      - name: total_revenue
+        description: "{{ doc('sales') }}"
+        tests:
+          - not_null
+
+  - name: int_sku_velocity_ranked
+    description: "Intermediate SKU velocity ranking model that adds cumulative contribution and state-level denominators before tier assignment. Grain remains one row per item_number."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+
+      - name: cumulative_units
+        description: "Running cumulative units across SKUs ranked by total_units_sold descending."
+        tests:
+          - not_null
+
+      - name: cumulative_revenue
+        description: "Running cumulative revenue across SKUs ranked by total_revenue descending."
+        tests:
+          - not_null
+
+      - name: state_total_units
+        description: "Statewide total units across the trailing-12-week SKU set."
+        tests:
+          - not_null
+
+      - name: state_total_revenue
+        description: "Statewide total revenue across the trailing-12-week SKU set."
+        tests:
+          - not_null
+
+  - name: int_sku_velocity_classified
+    description: "Intermediate SKU velocity classification model that converts ranked cumulative contributions into Pareto-style volume and revenue tiers before the final mart adds current item attributes."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+
+      - name: cumulative_volume_pct
+        description: "{{ doc('share_pct') }}"
+        tests:
+          - not_null
+
+      - name: cumulative_revenue_pct
+        description: "{{ doc('share_pct') }}"
+        tests:
+          - not_null
+
+      - name: sku_tier_volume
+        description: "{{ doc('sku_velocity_tier') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "Tier 1: Core (Top 80% Volume)"
+                  - "Tier 2: Niche (Next 15% Volume)"
+                  - "Tier 3: Zombie (Bottom 5% Volume)"
+
+      - name: sku_tier_revenue
+        description: "{{ doc('sku_velocity_tier') }}"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "Tier 1: Core (Top 80% Revenue)"
+                  - "Tier 2: Niche (Next 15% Revenue)"
+                  - "Tier 3: Zombie (Bottom 5% Revenue)"
