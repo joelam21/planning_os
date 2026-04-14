@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import os
 import pendulum
 
 from airflow import DAG
@@ -9,6 +10,40 @@ from airflow.operators.python import PythonOperator
 
 
 DEFAULT_SOURCE = "iowa_liquor"
+DEFAULT_BATCH_SIZE = 1000
+DEFAULT_MAX_BATCHES = 2000
+
+
+def _get_positive_int_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    try:
+        parsed_value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"Environment variable {name} must be an integer, got {raw_value!r}") from exc
+
+    if parsed_value <= 0:
+        raise ValueError(f"Environment variable {name} must be > 0, got {parsed_value}")
+
+    return parsed_value
+
+
+def _get_positive_int_conf(conf: dict[str, object], key: str, default: int) -> int:
+    raw_value = conf.get(key)
+    if raw_value in (None, ""):
+        return default
+
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"dag_run.conf[{key!r}] must be an integer, got {raw_value!r}") from exc
+
+    if parsed_value <= 0:
+        raise ValueError(f"dag_run.conf[{key!r}] must be > 0, got {parsed_value}")
+
+    return parsed_value
 
 
 def compute_run_window(**context) -> None:
@@ -23,6 +58,8 @@ def compute_run_window(**context) -> None:
     """
     dag_run = context.get("dag_run")
     conf = dag_run.conf if dag_run and dag_run.conf else {}
+    default_batch_size = _get_positive_int_env("PLANNING_OS_BATCH_SIZE", DEFAULT_BATCH_SIZE)
+    default_max_batches = _get_positive_int_env("PLANNING_OS_MAX_BATCHES", DEFAULT_MAX_BATCHES)
 
     if conf.get("start_date") and conf.get("end_date"):
         start_date = conf["start_date"]
@@ -42,11 +79,15 @@ def compute_run_window(**context) -> None:
         window_mode = "default_last_90_days"
 
     source = conf.get("source", DEFAULT_SOURCE)
+    batch_size = _get_positive_int_conf(conf, "batch_size", default_batch_size)
+    max_batches = _get_positive_int_conf(conf, "max_batches", default_max_batches)
 
     ti = context["ti"]
     ti.xcom_push(key="start_date", value=start_date)
     ti.xcom_push(key="end_date", value=end_date)
     ti.xcom_push(key="source", value=source)
+    ti.xcom_push(key="batch_size", value=batch_size)
+    ti.xcom_push(key="max_batches", value=max_batches)
     ti.xcom_push(key="window_mode", value=window_mode)
 
 
@@ -80,8 +121,8 @@ with DAG(
           --source {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }} \
           --start-date {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }} \
           --end-date {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }} \
-          --batch-size 1000 \
-          --max-batches 2000
+                    --batch-size {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }} \
+                    --max-batches {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}
         """,
     )
 
@@ -91,7 +132,9 @@ with DAG(
         echo "Validate ingestion window landed successfully" && \
         echo "Source: {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }}" && \
         echo "Start:  {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }}" && \
-        echo "End:    {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}"
+        echo "End:    {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}" && \
+        echo "Batch:  {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }}" && \
+        echo "Max:    {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}"
         """,
     )
 
@@ -143,7 +186,9 @@ with DAG(
         echo "Window mode: {{ ti.xcom_pull(task_ids='compute_run_window', key='window_mode') }}" && \
         echo "Source:      {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }}" && \
         echo "Start:       {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }}" && \
-        echo "End:         {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}"
+        echo "End:         {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}" && \
+        echo "Batch size:  {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }}" && \
+        echo "Max batches: {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}"
         """,
     )
 

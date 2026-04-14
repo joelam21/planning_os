@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: mon_pipeline_health
-    description: "Single-row monitoring view that aggregates raw-source freshness, fact-table coverage, and store-day mart coverage into one weekly pipeline health snapshot for operational review."
+    description: "Single-row monitoring view that aggregates raw-source freshness, snapshot recency, core fact-table coverage, and decision-support mart row counts into one weekly pipeline health snapshot for operational review."
     columns:
       - name: observed_at
         description: "Timestamp when the monitoring snapshot was computed."
@@ -29,6 +29,32 @@ models:
                   - WARN
                   - ERROR
 
+      - name: snap_item_current_row_count
+        description: "Current-row count in snap_item where dbt_valid_to is null."
+
+      - name: snap_item_max_dbt_valid_from
+        description: "Latest dbt_valid_from timestamp observed in snap_item."
+
+      - name: snap_store_current_row_count
+        description: "Current-row count in snap_store where dbt_valid_to is null."
+
+      - name: snap_store_max_dbt_valid_from
+        description: "Latest dbt_valid_from timestamp observed in snap_store."
+
+      - name: snapshot_lag_days
+        description: "Maximum lag in days between current_timestamp and the latest snapshot effective timestamp across snap_item and snap_store."
+
+      - name: snapshot_status
+        description: "Snapshot freshness classification based on the maximum snapshot lag threshold set (PASS <= 7 days, WARN > 7 days, ERROR > 14 days)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - PASS
+                  - WARN
+                  - ERROR
+
       - name: fact_row_count
         description: "Total row count in fct_liquor_sales."
 
@@ -46,3 +72,9 @@ models:
 
       - name: daily_max_order_date
         description: "Latest order_date currently present in fct_store_daily_sales."
+
+      - name: sku_velocity_row_count
+        description: "Total row count in fct_sku_velocity."
+
+      - name: replenishment_forecast_row_count
+        description: "Total row count in fct_replenishment_forecast."
