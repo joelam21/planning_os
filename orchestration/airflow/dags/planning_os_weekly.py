@@ -95,7 +95,8 @@ with DAG(
     dag_id="planning_os_weekly",
     description="Weekly orchestration DAG for planning_os ingestion, dbt build, tests, and health checks",
     start_date=datetime(2024, 1, 1),
-    schedule="0 9 * * 1",  # Mondays at 09:00 UTC
+    # Mondays at 09:00 UTC (01:00 PT / 04:00 ET in standard time; 02:00 PT / 05:00 ET in DST)
+    schedule="0 9 * * 1",
     catchup=False,
     max_active_runs=1,
     default_args={
