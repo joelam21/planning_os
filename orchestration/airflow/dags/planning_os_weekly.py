@@ -411,6 +411,164 @@ def check_pipeline_health(**context) -> None:
         print(f"[health] PASS: {health_summary}")
 
 
+def persist_run_summary(**context) -> None:
+    """
+    Persist one row of run metadata to OPS.PIPELINE_RUN_HISTORY.
+
+    Runs with trigger_rule="all_done" so it captures both successful and failed runs.
+    Captures all window, ingestion, dbt, and health data from XCom and context.
+    Determines final DAG state (success/failed/degraded) and persists to Snowflake.
+
+    Design rationale:
+    - Executes even if upstream tasks fail, so no run is lost from history
+    - Collects XCom values pushed by tasks (even if they later failed)
+    - Infers final state by checking task instance states
+    - Logs success/failure of persist operation separately from DAG state
+    """
+    import snowflake.connector
+
+    dag_run = context.get("dag_run")
+    dag = context.get("dag")
+    dag_id = dag.dag_id if dag else "unknown"
+    run_id = context.get("run_id", "")
+    logical_date = str(context.get("logical_date", ""))
+    run_type = getattr(dag_run, "run_type", "unknown") if dag_run else "unknown"
+
+    # DAG timing
+    dag_start_ts = None
+    dag_end_ts = None
+    duration_seconds = None
+
+    if dag_run:
+        if dag_run.start_date:
+            dag_start_ts = str(dag_run.start_date)
+        if dag_run.end_date:
+            dag_end_ts = str(dag_run.end_date)
+        if dag_run.start_date and dag_run.end_date:
+            delta = dag_run.end_date - dag_run.start_date
+            duration_seconds = int(delta.total_seconds())
+
+    ti = context["task_instance"]
+
+    # Window and ingestion params
+    window_mode = ti.xcom_pull(task_ids="compute_run_window", key="window_mode") or "unknown"
+    source = ti.xcom_pull(task_ids="compute_run_window", key="source") or "iowa_liquor"
+    start_date = ti.xcom_pull(task_ids="compute_run_window", key="start_date")
+    end_date = ti.xcom_pull(task_ids="compute_run_window", key="end_date")
+    window_days = ti.xcom_pull(task_ids="validate_run_contract", key="window_days")
+    batch_size = ti.xcom_pull(task_ids="compute_run_window", key="batch_size")
+    max_batches = ti.xcom_pull(task_ids="compute_run_window", key="max_batches")
+
+    # Ingestion data contract
+    ingested_row_count = ti.xcom_pull(task_ids="validate_data_contract", key="ingested_row_count")
+    ingested_min_order_date = ti.xcom_pull(task_ids="validate_data_contract", key="ingested_min_order_date")
+    ingested_max_order_date = ti.xcom_pull(task_ids="validate_data_contract", key="ingested_max_order_date")
+    ingested_loaded_at_lag_hours = ti.xcom_pull(
+        task_ids="validate_data_contract", key="ingested_loaded_at_lag_hours"
+    )
+
+    # Health check
+    freshness_status = ti.xcom_pull(task_ids="pipeline_health_check", key="freshness_status") or "unknown"
+    snapshot_status = ti.xcom_pull(task_ids="pipeline_health_check", key="snapshot_status") or "unknown"
+
+    # dbt_build_status
+    dbt_build_status = "unknown"
+    try:
+        if dag_run:
+            dbt_build_ti = dag_run.get_task_instance("dbt_build")
+            if dbt_build_ti:
+                dbt_build_status = dbt_build_ti.state or "unknown"
+    except Exception:
+        pass
+
+    # Determine final DAG state
+    # Check if any critical task failed
+    critical_tasks = [
+        "validate_run_contract",
+        "ingest_iowa_liquor",
+        "validate_data_contract",
+        "dbt_build",
+    ]
+    failed_tasks = []
+
+    try:
+        if dag_run:
+            for task_id in critical_tasks:
+                try:
+                    task_ti = dag_run.get_task_instance(task_id)
+                    if task_ti and task_ti.state in ("failed", "upstream_failed"):
+                        failed_tasks.append(task_id)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    if failed_tasks:
+        final_dag_state = "failed"
+    elif freshness_status == "WARN" or snapshot_status == "WARN":
+        final_dag_state = "degraded"
+    else:
+        final_dag_state = "success"
+
+    # Snowflake insert
+    params = _get_snowflake_connection_params()
+    database = params["database"]
+    schema = "OPS"
+
+    sql = f"""
+        insert into {database}.{schema}.PIPELINE_RUN_HISTORY (
+            dag_id, run_id, logical_date, run_type, window_mode, source,
+            start_date, end_date, window_days, batch_size, max_batches,
+            ingested_row_count, ingested_min_order_date, ingested_max_order_date,
+            ingested_loaded_at_lag_hours, freshness_status, snapshot_status,
+            dbt_build_status, final_dag_state, dag_start_ts, dag_end_ts, duration_seconds
+        ) values (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s, %s, %s
+        )
+    """
+
+    values = (
+        dag_id,
+        run_id,
+        logical_date,
+        run_type,
+        window_mode,
+        source,
+        start_date,
+        end_date,
+        window_days,
+        batch_size,
+        max_batches,
+        ingested_row_count,
+        ingested_min_order_date,
+        ingested_max_order_date,
+        ingested_loaded_at_lag_hours,
+        freshness_status,
+        snapshot_status,
+        dbt_build_status,
+        final_dag_state,
+        dag_start_ts,
+        dag_end_ts,
+        duration_seconds,
+    )
+
+    try:
+        with snowflake.connector.connect(**params) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, values)
+        print(
+            f"[ops] Run history persisted: run_id={run_id}, state={final_dag_state}, "
+            f"duration={duration_seconds}s, rows={ingested_row_count}"
+        )
+    except Exception as exc:
+        print(f"[ops] Failed to persist run history: {exc}")
+        raise
+
+
 def compute_run_window(**context) -> None:
     """
     Compute a default rolling ingestion window.
@@ -542,6 +700,12 @@ with DAG(
         python_callable=check_pipeline_health,
     )
 
+    persist_run_summary_task = PythonOperator(
+        task_id="persist_run_summary",
+        python_callable=persist_run_summary,
+        trigger_rule="all_done",
+    )
+
     publish_run_summary = BashOperator(
         task_id="publish_run_summary",
         trigger_rule="all_done",
@@ -573,5 +737,6 @@ with DAG(
         >> dbt_test_critical
         >> dbt_test_full
         >> pipeline_health_check
+        >> persist_run_summary_task
         >> publish_run_summary
     )
