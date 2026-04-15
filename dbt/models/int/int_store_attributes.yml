@@ -20,3 +20,12 @@ models:
           Stores not matching a known chain are classified as INDEPENDENT.
         tests:
           - not_null
+
+      - name: store_channel
+        description: >
+          Derived retail channel classification from store_name pattern matching.
+          Captures the store format used for channel-level analysis such as Grocery,
+          Liquor Store, Convenience/Gas, Warehouse/Club, Drug, On-Premise,
+          Winery/Distillery, Specialty/Tobacco, Mass Merchandise, or Unknown.
+        tests:
+          - not_null
