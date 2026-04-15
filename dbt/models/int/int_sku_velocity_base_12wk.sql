@@ -3,11 +3,11 @@ with trailing_12_weeks as (
         item_number,
         sum(bottles_sold) as total_units_sold,
         sum(sale_dollars) as total_revenue
-    from {{ ref('fct_liquor_sales') }}
+    from {{ ref('int_iowa_liquor_sales_deduped') }}
     where order_date >= dateadd(
         week,
         -12,
-        (select max(order_date) from {{ ref('fct_liquor_sales') }})
+        (select max(order_date) from {{ ref('int_iowa_liquor_sales_deduped') }})
     )
     and upper(invoice_item_number) not like 'RINV-%'
     group by item_number

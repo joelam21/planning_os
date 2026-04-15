@@ -1,6 +1,6 @@
 with max_date as (
     select date_trunc('week', max(order_date)) as current_week_start
-    from {{ ref('fct_liquor_sales') }}
+    from {{ ref('int_iowa_liquor_sales_deduped') }}
 ),
 
 week_spine as (
@@ -15,7 +15,7 @@ weekly_depletions as (
         date_trunc('week', order_date) as week_start,
         item_number,
         sum(bottles_sold) as weekly_units_sold
-    from {{ ref('fct_liquor_sales') }}
+    from {{ ref('int_iowa_liquor_sales_deduped') }}
     where upper(invoice_item_number) not like 'RINV-%'
     group by 1, 2
 ),
