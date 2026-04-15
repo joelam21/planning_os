@@ -67,6 +67,125 @@ def _require_env(name: str) -> str:
     return value
 
 
+ALERT_EMAIL_ENV = "PLANNING_OS_ALERT_EMAIL"
+
+
+def _get_alert_email() -> str | None:
+    return os.getenv(ALERT_EMAIL_ENV)
+
+
+def _build_failure_email_body(context: dict[str, Any]) -> tuple[str, str]:
+    dag_id = context.get("dag").dag_id if context.get("dag") else "unknown"
+    task_id = context["task_instance"].task_id
+    run_id = context["run_id"]
+    logical_date = str(context.get("logical_date", ""))
+    exception = str(context.get("exception", ""))
+
+    ti = context["task_instance"]
+    source = ti.xcom_pull(task_ids="compute_run_window", key="source") or "—"
+    start_date = ti.xcom_pull(task_ids="compute_run_window", key="start_date") or "—"
+    end_date = ti.xcom_pull(task_ids="compute_run_window", key="end_date") or "—"
+    window_mode = ti.xcom_pull(task_ids="compute_run_window", key="window_mode") or "—"
+
+    log_url = context["task_instance"].log_url
+
+    subject = f"[planning_os] FAILED: {dag_id} / {task_id} ({run_id})"
+    body = (
+        f"<h3>Task failed: {task_id}</h3>"
+        f"<table>"
+        f"<tr><td><b>DAG</b></td><td>{dag_id}</td></tr>"
+        f"<tr><td><b>Task</b></td><td>{task_id}</td></tr>"
+        f"<tr><td><b>Run ID</b></td><td>{run_id}</td></tr>"
+        f"<tr><td><b>Logical date</b></td><td>{logical_date}</td></tr>"
+        f"<tr><td><b>Window mode</b></td><td>{window_mode}</td></tr>"
+        f"<tr><td><b>Source</b></td><td>{source}</td></tr>"
+        f"<tr><td><b>Start date</b></td><td>{start_date}</td></tr>"
+        f"<tr><td><b>End date</b></td><td>{end_date}</td></tr>"
+        f"<tr><td><b>Exception</b></td><td><pre>{exception}</pre></td></tr>"
+        f"<tr><td><b>Logs</b></td><td><a href=\"{log_url}\">{log_url}</a></td></tr>"
+        f"</table>"
+    )
+    return subject, body
+
+
+def failure_callback(context: dict[str, Any]) -> None:
+    from airflow.utils.email import send_email
+
+    recipient = _get_alert_email()
+    if not recipient:
+        print(
+            f"[alert] No {ALERT_EMAIL_ENV} configured — skipping failure email. "
+            f"Task: {context['task_instance'].task_id}"
+        )
+        return
+
+    subject, body = _build_failure_email_body(context)
+    try:
+        send_email(to=recipient, subject=subject, html_content=body)
+        print(f"[alert] Failure email sent to {recipient}: {subject}")
+    except Exception as exc:
+        print(f"[alert] Failed to send failure email: {exc}")
+
+
+def _format_health_status(value: str) -> str:
+    """Render a health status value with a visual flag when degraded."""
+    upper = value.upper()
+    if upper == "WARN":
+        return f"<span style=\"color:#b45309;font-weight:bold\">⚠ {value}</span>"
+    if upper == "ERROR":
+        return f"<span style=\"color:#b91c1c;font-weight:bold\">✖ {value}</span>"
+    return f"<span style=\"color:#15803d\">{value}</span>"
+
+
+def success_callback_scheduled_only(context: dict[str, Any]) -> None:
+    """Sends a success notification only for scheduled runs, not manual triggers."""
+    from airflow.utils.email import send_email
+
+    dag_run = context.get("dag_run")
+    run_type = getattr(dag_run, "run_type", None)
+    if run_type != "scheduled":
+        return
+
+    recipient = _get_alert_email()
+    if not recipient:
+        return
+
+    dag_id = context.get("dag").dag_id if context.get("dag") else "unknown"
+    run_id = context["run_id"]
+    logical_date = str(context.get("logical_date", ""))
+    ti = context["task_instance"]
+
+    source = ti.xcom_pull(task_ids="compute_run_window", key="source") or "—"
+    start_date = ti.xcom_pull(task_ids="compute_run_window", key="start_date") or "—"
+    end_date = ti.xcom_pull(task_ids="compute_run_window", key="end_date") or "—"
+    row_count = ti.xcom_pull(task_ids="validate_data_contract", key="ingested_row_count") or "—"
+    freshness = ti.xcom_pull(task_ids="pipeline_health_check", key="freshness_status") or "—"
+    snapshot = ti.xcom_pull(task_ids="pipeline_health_check", key="snapshot_status") or "—"
+
+    any_warn = any(s.upper() == "WARN" for s in (freshness, snapshot) if s != "—")
+    status_label = "OK (DEGRADED)" if any_warn else "OK"
+    subject = f"[planning_os] {status_label}: {dag_id} ({run_id})"
+    body = (
+        f"<h3>Scheduled run completed — {status_label}</h3>"
+        f"<table>"
+        f"<tr><td><b>DAG</b></td><td>{dag_id}</td></tr>"
+        f"<tr><td><b>Run ID</b></td><td>{run_id}</td></tr>"
+        f"<tr><td><b>Logical date</b></td><td>{logical_date}</td></tr>"
+        f"<tr><td><b>Source</b></td><td>{source}</td></tr>"
+        f"<tr><td><b>Window</b></td><td>{start_date} → {end_date}</td></tr>"
+        f"<tr><td><b>Rows landed</b></td><td>{row_count}</td></tr>"
+        f"<tr><td><b>Freshness status</b></td><td>{_format_health_status(freshness)}</td></tr>"
+        f"<tr><td><b>Snapshot status</b></td><td>{_format_health_status(snapshot)}</td></tr>"
+        f"</table>"
+    )
+
+    try:
+        send_email(to=recipient, subject=subject, html_content=body)
+        print(f"[alert] Scheduled success email sent to {recipient}")
+    except Exception as exc:
+        print(f"[alert] Failed to send success email: {exc}")
+
+
 def _get_snowflake_connection_params() -> dict[str, Any]:
     params: dict[str, Any] = {
         "account": _require_env("DBT_ACCOUNT"),
@@ -262,25 +381,34 @@ def check_pipeline_health(**context) -> None:
         replenishment_forecast_row_count,
     ) = row
 
-    status_values = {str(freshness_status).upper(), str(snapshot_status).upper()}
-    if "ERROR" in status_values:
-        raise ValueError(
-            "Pipeline health check failed: "
-            f"freshness_status={freshness_status}, snapshot_status={snapshot_status}, "
-            f"raw_lag_days={raw_lag_days}, snapshot_lag_days={snapshot_lag_days}"
-        )
+    # Warn vs fail policy:
+    #   ERROR  → fail the task immediately (blocks downstream, triggers failure alert)
+    #   WARN   → log and continue (pipeline is degraded but not broken)
+    #   PASS   → nominal
+    ti = context["ti"]
+    ti.xcom_push(key="freshness_status", value=str(freshness_status))
+    ti.xcom_push(key="snapshot_status", value=str(snapshot_status))
 
-    context["ti"].xcom_push(key="freshness_status", value=str(freshness_status))
-    context["ti"].xcom_push(key="snapshot_status", value=str(snapshot_status))
-
-    print(
-        "Pipeline health check passed: "
+    health_summary = (
         f"freshness_status={freshness_status}, snapshot_status={snapshot_status}, "
         f"raw_lag_days={raw_lag_days}, snapshot_lag_days={snapshot_lag_days}, "
         f"fact_row_count={fact_row_count}, daily_store_day_count={daily_store_day_count}, "
         f"sku_velocity_row_count={sku_velocity_row_count}, "
         f"replenishment_forecast_row_count={replenishment_forecast_row_count}"
     )
+
+    freshness_upper = str(freshness_status).upper()
+    snapshot_upper = str(snapshot_status).upper()
+
+    if freshness_upper == "ERROR" or snapshot_upper == "ERROR":
+        raise ValueError(
+            f"Pipeline health check FAILED (ERROR status): {health_summary}"
+        )
+
+    if freshness_upper == "WARN" or snapshot_upper == "WARN":
+        print(f"[health] WARN — pipeline degraded but not broken: {health_summary}")
+    else:
+        print(f"[health] PASS: {health_summary}")
 
 
 def compute_run_window(**context) -> None:
@@ -336,10 +464,13 @@ with DAG(
     schedule="0 9 * * 1",
     catchup=False,
     max_active_runs=1,
+    on_failure_callback=failure_callback,
+    on_success_callback=success_callback_scheduled_only,
     default_args={
         "owner": "airflow",
         "retries": 0,
         "retry_delay": timedelta(minutes=5),
+        "on_failure_callback": failure_callback,
     },
     tags=["planning_os", "orchestration", "weekly"],
 ) as dag:
