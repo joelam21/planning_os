@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import os
 import pendulum
+from typing import Any
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -10,8 +11,11 @@ from airflow.operators.python import PythonOperator
 
 
 DEFAULT_SOURCE = "iowa_liquor"
+ALLOWED_SOURCES = {"iowa_liquor"}
 DEFAULT_BATCH_SIZE = 1000
 DEFAULT_MAX_BATCHES = 2000
+DEFAULT_MAX_MANUAL_WINDOW_DAYS = 366
+DEFAULT_MAX_INGESTION_LAG_HOURS = 24
 
 
 def _get_positive_int_env(name: str, default: int) -> int:
@@ -44,6 +48,239 @@ def _get_positive_int_conf(conf: dict[str, object], key: str, default: int) -> i
         raise ValueError(f"dag_run.conf[{key!r}] must be > 0, got {parsed_value}")
 
     return parsed_value
+
+
+def _parse_iso_date(value: Any, field_name: str) -> pendulum.Date:
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+
+    try:
+        return pendulum.from_format(str(value), "YYYY-MM-DD", tz="UTC").date()
+    except Exception as exc:  # pragma: no cover
+        raise ValueError(f"{field_name} must be YYYY-MM-DD, got {value!r}") from exc
+
+
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise ValueError(f"Required environment variable is missing: {name}")
+    return value
+
+
+def _get_snowflake_connection_params() -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "account": _require_env("DBT_ACCOUNT"),
+        "user": _require_env("DBT_USER"),
+        "password": _require_env("DBT_PASSWORD"),
+        "role": _require_env("DBT_ROLE"),
+        "warehouse": _require_env("DBT_WAREHOUSE"),
+        "database": _require_env("DBT_DATABASE"),
+        "schema": _require_env("DBT_SCHEMA"),
+    }
+
+    authenticator = os.getenv("DBT_AUTHENTICATOR")
+    if authenticator:
+        params["authenticator"] = authenticator
+
+    return params
+
+
+def validate_run_contract(**context) -> None:
+    ti = context["ti"]
+    source = ti.xcom_pull(task_ids="compute_run_window", key="source")
+    start_date_raw = ti.xcom_pull(task_ids="compute_run_window", key="start_date")
+    end_date_raw = ti.xcom_pull(task_ids="compute_run_window", key="end_date")
+    batch_size = ti.xcom_pull(task_ids="compute_run_window", key="batch_size")
+    max_batches = ti.xcom_pull(task_ids="compute_run_window", key="max_batches")
+    window_mode = ti.xcom_pull(task_ids="compute_run_window", key="window_mode")
+
+    if source not in ALLOWED_SOURCES:
+        raise ValueError(
+            f"source must be one of {sorted(ALLOWED_SOURCES)}, got {source!r}"
+        )
+
+    start_date = _parse_iso_date(start_date_raw, "start_date")
+    end_date = _parse_iso_date(end_date_raw, "end_date")
+
+    if end_date < start_date:
+        raise ValueError(
+            f"end_date must be >= start_date, got {start_date} to {end_date}"
+        )
+
+    window_days = (end_date - start_date).days + 1
+    if window_days <= 0:
+        raise ValueError(f"window_days must be > 0, got {window_days}")
+
+    max_manual_window_days = _get_positive_int_env(
+        "PLANNING_OS_MAX_MANUAL_WINDOW_DAYS",
+        DEFAULT_MAX_MANUAL_WINDOW_DAYS,
+    )
+    if window_mode == "manual" and window_days > max_manual_window_days:
+        raise ValueError(
+            "manual window exceeds configured maximum: "
+            f"window_days={window_days}, max_allowed={max_manual_window_days}"
+        )
+
+    if int(batch_size) <= 0:
+        raise ValueError(f"batch_size must be > 0, got {batch_size}")
+    if int(max_batches) <= 0:
+        raise ValueError(f"max_batches must be > 0, got {max_batches}")
+
+    ti.xcom_push(key="window_days", value=window_days)
+    print(
+        "Run contract validated: "
+        f"mode={window_mode}, source={source}, start={start_date}, end={end_date}, "
+        f"window_days={window_days}, batch_size={batch_size}, max_batches={max_batches}"
+    )
+
+
+def validate_data_contract(**context) -> None:
+    import snowflake.connector
+
+    ti = context["ti"]
+    source = ti.xcom_pull(task_ids="compute_run_window", key="source")
+    start_date = ti.xcom_pull(task_ids="compute_run_window", key="start_date")
+    end_date = ti.xcom_pull(task_ids="compute_run_window", key="end_date")
+
+    if source != "iowa_liquor":
+        raise ValueError(f"Unsupported source for data contract validation: {source!r}")
+
+    params = _get_snowflake_connection_params()
+    schema = params["schema"]
+    database = params["database"]
+
+    max_ingestion_lag_hours = _get_positive_int_env(
+        "PLANNING_OS_MAX_INGESTION_LAG_HOURS",
+        DEFAULT_MAX_INGESTION_LAG_HOURS,
+    )
+
+    sql = f"""
+        select
+            count(*) as row_count,
+            min(order_date) as min_order_date,
+            max(order_date) as max_order_date,
+            max(loaded_at) as max_loaded_at,
+            datediff('hour', max(loaded_at), current_timestamp()) as loaded_at_lag_hours
+        from {database}.{schema}.RAW_IOWA_LIQUOR
+        where order_date between to_date(%s) and to_date(%s)
+    """
+
+    with snowflake.connector.connect(**params) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, (start_date, end_date))
+            row = cursor.fetchone()
+
+    if row is None:
+        raise ValueError("Data contract validation returned no result row")
+
+    row_count, min_order_date, max_order_date, max_loaded_at, loaded_at_lag_hours = row
+
+    if row_count <= 0:
+        raise ValueError(
+            "No rows landed for requested window: "
+            f"source={source}, start_date={start_date}, end_date={end_date}"
+        )
+
+    if min_order_date is None or max_order_date is None:
+        raise ValueError("order_date bounds are null for landed data")
+
+    requested_start = _parse_iso_date(start_date, "start_date")
+    requested_end = _parse_iso_date(end_date, "end_date")
+
+    if max_order_date < requested_start or min_order_date > requested_end:
+        raise ValueError(
+            "Landed data does not overlap requested window: "
+            f"requested=[{requested_start}, {requested_end}] "
+            f"landed=[{min_order_date}, {max_order_date}]"
+        )
+
+    if max_loaded_at is None:
+        raise ValueError("loaded_at is null for landed data")
+
+    if loaded_at_lag_hours is None:
+        raise ValueError("loaded_at_lag_hours is null")
+
+    if loaded_at_lag_hours > max_ingestion_lag_hours:
+        raise ValueError(
+            "Landed data is stale beyond configured threshold: "
+            f"loaded_at_lag_hours={loaded_at_lag_hours}, "
+            f"max_allowed={max_ingestion_lag_hours}"
+        )
+
+    ti.xcom_push(key="ingested_row_count", value=int(row_count))
+    ti.xcom_push(key="ingested_min_order_date", value=str(min_order_date))
+    ti.xcom_push(key="ingested_max_order_date", value=str(max_order_date))
+    ti.xcom_push(key="ingested_max_loaded_at", value=str(max_loaded_at))
+    ti.xcom_push(key="ingested_loaded_at_lag_hours", value=int(loaded_at_lag_hours))
+
+    print(
+        "Data contract validated: "
+        f"row_count={row_count}, min_order_date={min_order_date}, "
+        f"max_order_date={max_order_date}, max_loaded_at={max_loaded_at}, "
+        f"loaded_at_lag_hours={loaded_at_lag_hours}"
+    )
+
+
+def check_pipeline_health(**context) -> None:
+    import snowflake.connector
+
+    params = _get_snowflake_connection_params()
+    schema = params["schema"]
+    database = params["database"]
+
+    sql = f"""
+        select
+            freshness_status,
+            snapshot_status,
+            raw_lag_days,
+            snapshot_lag_days,
+            fact_row_count,
+            daily_store_day_count,
+            sku_velocity_row_count,
+            replenishment_forecast_row_count
+        from {database}.{schema}.MON_PIPELINE_HEALTH
+        order by observed_at desc
+        limit 1
+    """
+
+    with snowflake.connector.connect(**params) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+            row = cursor.fetchone()
+
+    if row is None:
+        raise ValueError("MON_PIPELINE_HEALTH returned no rows")
+
+    (
+        freshness_status,
+        snapshot_status,
+        raw_lag_days,
+        snapshot_lag_days,
+        fact_row_count,
+        daily_store_day_count,
+        sku_velocity_row_count,
+        replenishment_forecast_row_count,
+    ) = row
+
+    status_values = {str(freshness_status).upper(), str(snapshot_status).upper()}
+    if "ERROR" in status_values:
+        raise ValueError(
+            "Pipeline health check failed: "
+            f"freshness_status={freshness_status}, snapshot_status={snapshot_status}, "
+            f"raw_lag_days={raw_lag_days}, snapshot_lag_days={snapshot_lag_days}"
+        )
+
+    context["ti"].xcom_push(key="freshness_status", value=str(freshness_status))
+    context["ti"].xcom_push(key="snapshot_status", value=str(snapshot_status))
+
+    print(
+        "Pipeline health check passed: "
+        f"freshness_status={freshness_status}, snapshot_status={snapshot_status}, "
+        f"raw_lag_days={raw_lag_days}, snapshot_lag_days={snapshot_lag_days}, "
+        f"fact_row_count={fact_row_count}, daily_store_day_count={daily_store_day_count}, "
+        f"sku_velocity_row_count={sku_velocity_row_count}, "
+        f"replenishment_forecast_row_count={replenishment_forecast_row_count}"
+    )
 
 
 def compute_run_window(**context) -> None:
@@ -112,6 +349,11 @@ with DAG(
         python_callable=compute_run_window,
     )
 
+    validate_run_contract_task = PythonOperator(
+        task_id="validate_run_contract",
+        python_callable=validate_run_contract,
+    )
+
     ingest_iowa_liquor = BashOperator(
         task_id="ingest_iowa_liquor",
         retries=2,
@@ -127,16 +369,9 @@ with DAG(
         """,
     )
 
-    validate_ingestion = BashOperator(
-        task_id="validate_ingestion",
-        bash_command="""
-        echo "Validate ingestion window landed successfully" && \
-        echo "Source: {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }}" && \
-        echo "Start:  {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }}" && \
-        echo "End:    {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}" && \
-        echo "Batch:  {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }}" && \
-        echo "Max:    {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}"
-        """,
+    validate_data_contract_task = PythonOperator(
+        task_id="validate_data_contract",
+        python_callable=validate_data_contract,
     )
 
     dbt_source_freshness = BashOperator(
@@ -171,12 +406,9 @@ with DAG(
         """,
     )
 
-    pipeline_health_check = BashOperator(
+    pipeline_health_check = PythonOperator(
         task_id="pipeline_health_check",
-        bash_command="""
-        cd /opt/planning_os && \
-        echo "Placeholder: query MON_PIPELINE_HEALTH after Snowflake tooling is available"
-        """,
+        python_callable=check_pipeline_health,
     )
 
     publish_run_summary = BashOperator(
@@ -188,15 +420,23 @@ with DAG(
         echo "Source:      {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }}" && \
         echo "Start:       {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }}" && \
         echo "End:         {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}" && \
+        echo "Window days: {{ ti.xcom_pull(task_ids='validate_run_contract', key='window_days') }}" && \
         echo "Batch size:  {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }}" && \
-        echo "Max batches: {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}"
+        echo "Max batches: {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}" && \
+        echo "Rows landed: {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_row_count') }}" && \
+        echo "Landed min:  {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_min_order_date') }}" && \
+        echo "Landed max:  {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_max_order_date') }}" && \
+        echo "Load lag h:  {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_loaded_at_lag_hours') }}" && \
+        echo "Freshness:   {{ ti.xcom_pull(task_ids='pipeline_health_check', key='freshness_status') }}" && \
+        echo "Snapshot:    {{ ti.xcom_pull(task_ids='pipeline_health_check', key='snapshot_status') }}"
         """,
     )
 
     (
         compute_run_window_task
+        >> validate_run_contract_task
         >> ingest_iowa_liquor
-        >> validate_ingestion
+        >> validate_data_contract_task
         >> dbt_source_freshness
         >> dbt_build
         >> dbt_test_critical
