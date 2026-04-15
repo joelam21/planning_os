@@ -17,6 +17,19 @@ DEFAULT_MAX_BATCHES = 2000
 DEFAULT_MAX_MANUAL_WINDOW_DAYS = 366
 DEFAULT_MAX_INGESTION_LAG_HOURS = 24
 
+PIPELINE_FAILURE_TASK_IDS = [
+    "validate_run_contract",
+    "ingest_iowa_liquor",
+    "validate_data_contract",
+    "dbt_source_freshness",
+    "dbt_build",
+    "dbt_test_critical",
+    "dbt_test_full",
+    "pipeline_health_check",
+]
+
+FINAL_STATUS_TASK_IDS = PIPELINE_FAILURE_TASK_IDS + ["persist_run_summary"]
+
 
 def _get_positive_int_env(name: str, default: int) -> int:
     raw_value = os.getenv(name)
@@ -65,6 +78,24 @@ def _require_env(name: str) -> str:
     if not value:
         raise ValueError(f"Required environment variable is missing: {name}")
     return value
+
+
+def _get_failed_task_ids(dag_run: Any, task_ids: list[str]) -> list[str]:
+    failed_task_ids: list[str] = []
+
+    if not dag_run:
+        return failed_task_ids
+
+    for task_id in task_ids:
+        try:
+            task_instance = dag_run.get_task_instance(task_id)
+        except Exception:
+            continue
+
+        if task_instance and task_instance.state in ("failed", "upstream_failed"):
+            failed_task_ids.append(task_id)
+
+    return failed_task_ids
 
 
 ALERT_EMAIL_ENV = "PLANNING_OS_ALERT_EMAIL"
@@ -194,7 +225,7 @@ def _get_snowflake_connection_params() -> dict[str, Any]:
         "role": _require_env("DBT_ROLE"),
         "warehouse": _require_env("DBT_WAREHOUSE"),
         "database": _require_env("DBT_DATABASE"),
-        "schema": _require_env("DBT_SCHEMA"),
+        "schema": _require_env("DBT_DEV_SCHEMA"),
     }
 
     authenticator = os.getenv("DBT_AUTHENTICATOR")
@@ -276,12 +307,12 @@ def validate_data_contract(**context) -> None:
     sql = f"""
         select
             count(*) as row_count,
-            min(order_date) as min_order_date,
-            max(order_date) as max_order_date,
+            min(date) as min_order_date,
+            max(date) as max_order_date,
             max(loaded_at) as max_loaded_at,
             datediff('hour', max(loaded_at), current_timestamp()) as loaded_at_lag_hours
         from {database}.{schema}.RAW_IOWA_LIQUOR
-        where order_date between to_date(%s) and to_date(%s)
+        where date between to_date(%s) and to_date(%s)
     """
 
     with snowflake.connector.connect(**params) as conn:
@@ -481,27 +512,8 @@ def persist_run_summary(**context) -> None:
     except Exception:
         pass
 
-    # Determine final DAG state
-    # Check if any critical task failed
-    critical_tasks = [
-        "validate_run_contract",
-        "ingest_iowa_liquor",
-        "validate_data_contract",
-        "dbt_build",
-    ]
-    failed_tasks = []
-
-    try:
-        if dag_run:
-            for task_id in critical_tasks:
-                try:
-                    task_ti = dag_run.get_task_instance(task_id)
-                    if task_ti and task_ti.state in ("failed", "upstream_failed"):
-                        failed_tasks.append(task_id)
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    # Determine final DAG state from the full critical pipeline path.
+    failed_tasks = _get_failed_task_ids(dag_run, PIPELINE_FAILURE_TASK_IDS)
 
     if failed_tasks:
         final_dag_state = "failed"
@@ -567,6 +579,37 @@ def persist_run_summary(**context) -> None:
     except Exception as exc:
         print(f"[ops] Failed to persist run history: {exc}")
         raise
+
+
+def publish_run_summary(**context) -> None:
+    dag_run = context.get("dag_run")
+    ti = context["task_instance"]
+
+    summary_lines = [
+        "planning_os run summary",
+        f"Window mode: {ti.xcom_pull(task_ids='compute_run_window', key='window_mode')}",
+        f"Source:      {ti.xcom_pull(task_ids='compute_run_window', key='source')}",
+        f"Start:       {ti.xcom_pull(task_ids='compute_run_window', key='start_date')}",
+        f"End:         {ti.xcom_pull(task_ids='compute_run_window', key='end_date')}",
+        f"Window days: {ti.xcom_pull(task_ids='validate_run_contract', key='window_days')}",
+        f"Batch size:  {ti.xcom_pull(task_ids='compute_run_window', key='batch_size')}",
+        f"Max batches: {ti.xcom_pull(task_ids='compute_run_window', key='max_batches')}",
+        f"Rows landed: {ti.xcom_pull(task_ids='validate_data_contract', key='ingested_row_count')}",
+        f"Landed min:  {ti.xcom_pull(task_ids='validate_data_contract', key='ingested_min_order_date')}",
+        f"Landed max:  {ti.xcom_pull(task_ids='validate_data_contract', key='ingested_max_order_date')}",
+        f"Load lag h:  {ti.xcom_pull(task_ids='validate_data_contract', key='ingested_loaded_at_lag_hours')}",
+        f"Freshness:   {ti.xcom_pull(task_ids='pipeline_health_check', key='freshness_status')}",
+        f"Snapshot:    {ti.xcom_pull(task_ids='pipeline_health_check', key='snapshot_status')}",
+    ]
+
+    print("\n".join(summary_lines))
+
+    failed_tasks = _get_failed_task_ids(dag_run, FINAL_STATUS_TASK_IDS)
+    if failed_tasks:
+        raise ValueError(
+            "planning_os_weekly completed summary publication, but critical tasks failed: "
+            f"{', '.join(failed_tasks)}"
+        )
 
 
 def compute_run_window(**context) -> None:
@@ -706,25 +749,10 @@ with DAG(
         trigger_rule="all_done",
     )
 
-    publish_run_summary = BashOperator(
+    publish_run_summary = PythonOperator(
         task_id="publish_run_summary",
+        python_callable=publish_run_summary,
         trigger_rule="all_done",
-        bash_command="""
-        echo "planning_os run summary" && \
-        echo "Window mode: {{ ti.xcom_pull(task_ids='compute_run_window', key='window_mode') }}" && \
-        echo "Source:      {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }}" && \
-        echo "Start:       {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }}" && \
-        echo "End:         {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }}" && \
-        echo "Window days: {{ ti.xcom_pull(task_ids='validate_run_contract', key='window_days') }}" && \
-        echo "Batch size:  {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }}" && \
-        echo "Max batches: {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}" && \
-        echo "Rows landed: {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_row_count') }}" && \
-        echo "Landed min:  {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_min_order_date') }}" && \
-        echo "Landed max:  {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_max_order_date') }}" && \
-        echo "Load lag h:  {{ ti.xcom_pull(task_ids='validate_data_contract', key='ingested_loaded_at_lag_hours') }}" && \
-        echo "Freshness:   {{ ti.xcom_pull(task_ids='pipeline_health_check', key='freshness_status') }}" && \
-        echo "Snapshot:    {{ ti.xcom_pull(task_ids='pipeline_health_check', key='snapshot_status') }}"
-        """,
     )
 
     (

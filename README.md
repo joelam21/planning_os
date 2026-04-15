@@ -255,6 +255,19 @@ http://localhost:8080
 - Airflow credentials are sourced from the repository root `.env`
 - Airflow runtime dependencies are intentionally minimal and defined in `orchestration/airflow/requirements-airflow.txt`
 
+### Weekly DAG Operational Notes
+
+- The `planning_os_weekly` DAG validates the raw ingestion window directly against `RAW_IOWA_LIQUOR` before dbt execution continues
+- Raw-layer window validation checks the landed `date` column in `RAW_IOWA_LIQUOR`, not a downstream `order_date` alias
+- Final DAG state is tied to critical-path task outcomes so a run is not reported as successful when ingestion or validation fails
+- Iowa API requests use bounded request-level retries with exponential backoff inside ingestion, which hardens the pipeline against transient upstream disconnects and timeouts
+
+Relevant retry settings in `.env`:
+
+- `PLANNING_OS_IOWA_REQUEST_TIMEOUT_SECONDS` → per-request timeout for Iowa API calls
+- `PLANNING_OS_IOWA_REQUEST_MAX_RETRIES` → max retry attempts for transient request failures
+- `PLANNING_OS_IOWA_REQUEST_BACKOFF_BASE_SECONDS` → base seconds used for exponential backoff between retries
+
 ## Phase 2: Orchestration Integration
 
 Once the local Airflow foundation was verified, the work shifted from platform setup to runtime integration. At that point, the question was no longer just whether Airflow could run — it became whether Airflow could run *this project* reliably.
