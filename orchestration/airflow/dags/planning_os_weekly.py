@@ -691,18 +691,20 @@ with DAG(
         retry_delay=timedelta(minutes=10),
         bash_command="""
         cd /opt/planning_os && \
-        ./run.sh pipeline \
+        ./run.sh ingest \
           --source {{ ti.xcom_pull(task_ids='compute_run_window', key='source') }} \
           --start-date {{ ti.xcom_pull(task_ids='compute_run_window', key='start_date') }} \
           --end-date {{ ti.xcom_pull(task_ids='compute_run_window', key='end_date') }} \
-                    --batch-size {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }} \
-                    --max-batches {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}
+          --batch-size {{ ti.xcom_pull(task_ids='compute_run_window', key='batch_size') }} \
+          --max-batches {{ ti.xcom_pull(task_ids='compute_run_window', key='max_batches') }}
         """,
     )
 
     validate_data_contract_task = PythonOperator(
         task_id="validate_data_contract",
         python_callable=validate_data_contract,
+        retries=1,
+        retry_delay=timedelta(minutes=2),
     )
 
     dbt_source_freshness = BashOperator(
@@ -717,7 +719,7 @@ with DAG(
         task_id="dbt_build",
         bash_command="""
         cd /opt/planning_os && \
-        dbt build
+        dbt run
         """,
     )
 
@@ -740,6 +742,8 @@ with DAG(
     pipeline_health_check = PythonOperator(
         task_id="pipeline_health_check",
         python_callable=check_pipeline_health,
+        retries=1,
+        retry_delay=timedelta(minutes=2),
     )
 
     persist_run_summary_task = PythonOperator(

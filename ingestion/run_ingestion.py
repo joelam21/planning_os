@@ -94,6 +94,7 @@ def main() -> None:
         schema = config["schema"]
         table_name = get_table_name_for_source(args.source)
         create_sample_table(conn, schema, table_name)
+        conn.commit()
         print(
             f"[ingestion] Ensured table exists: {config['database']}.{schema}.{table_name}"
         )
@@ -135,7 +136,14 @@ def main() -> None:
             insert_sample_rows(conn, schema, table_name, rows)
             inserted_row_count = len(rows)
 
+        conn.commit()
         print(f"[ingestion] Inserted {inserted_row_count} rows for source={args.source}")
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+            print("[ingestion] Transaction rolled back due to error")
+        raise
 
     finally:
         if conn is not None:

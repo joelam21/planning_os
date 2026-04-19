@@ -94,8 +94,6 @@ def delete_iowa_liquor_date_range(
     with conn.cursor() as cur:
         cur.execute(sql, params)
 
-    conn.commit()
-
 
 def insert_sample_rows(conn, schema: str, table_name: str, rows: list[dict]) -> None:
     if table_name == "RAW_IOWA_LIQUOR":
@@ -178,4 +176,3 @@ def insert_sample_rows(conn, schema: str, table_name: str, rows: list[dict]) -> 
 
     with conn.cursor() as cur:
         cur.executemany(sql, values)
-    conn.commit()

@@ -7,8 +7,12 @@ models:
       - name: store_number
         description: "{{ doc('store_number') }}"
         tests:
-          - not_null
-          - unique
+          - not_null:
+              config:
+                tags: ['critical']
+          - unique:
+              config:
+                tags: ['critical']
 
   - name: dim_item
     description: "Current-state Type 1 item dimension (one row per item_number), derived from snap_item."
@@ -16,8 +20,12 @@ models:
       - name: item_number
         description: "{{ doc('item_number') }}"
         tests:
-          - not_null
-          - unique
+          - not_null:
+              config:
+                tags: ['critical']
+          - unique:
+              config:
+                tags: ['critical']
 
       - name: category_family
         description: "Broad category family mapped from category/category_name (for example Whiskies, Vodkas, Tequilas)."
@@ -157,8 +165,12 @@ models:
       - name: invoice_item_number
         description: "{{ doc('invoice_item_number') }}"
         tests:
-          - not_null
-          - unique
+          - not_null:
+              config:
+                tags: ['critical']
+          - unique:
+              config:
+                tags: ['critical']
 
       - name: order_date
         description: "{{ doc('order_date') }}"
@@ -196,12 +208,16 @@ models:
       - name: order_date
         description: "Calendar date for the aggregated store-day record."
         tests:
-          - not_null
+          - not_null:
+              config:
+                tags: ['critical']
 
       - name: store_number
         description: "Store identifier for the aggregated store-day record."
         tests:
-          - not_null
+          - not_null:
+              config:
+                tags: ['critical']
           - relationships:
               arguments:
                 to: ref('dim_store')

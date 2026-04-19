@@ -161,25 +161,11 @@ case "$COMMAND" in
         ;;
 
     ingest)
+        # Optional args (--source, --start-date, --end-date, --batch-size, --max-batches)
+        # are forwarded directly to the ingestion runner.
+        shift
         echo "[run] Running ingestion step"
-        # Convention: prefer a project-local ingestion script if present.
-        # You can implement one of these later:
-        #   - ./ingestion/run_ingestion.sh
-        #   - ./ingestion/run_ingestion.py
-        #   - ./ingestion/scripts/run.py
-        if [ -x "./ingestion/run_ingestion.sh" ]; then
-            ./ingestion/run_ingestion.sh
-        elif [ -f "./ingestion/run_ingestion.py" ]; then
-            "$ACTIVE_PYTHON" -m ingestion.run_ingestion
-        elif [ -f "./ingestion/scripts/run.py" ]; then
-            "$ACTIVE_PYTHON" ./ingestion/scripts/run.py
-        else
-            echo "[run] No ingestion runner found. Create one of:"
-            echo "  ./ingestion/run_ingestion.sh (preferred)"
-            echo "  ./ingestion/run_ingestion.py"
-            echo "  ./ingestion/scripts/run.py"
-            exit 2
-        fi
+        "$ACTIVE_PYTHON" -m ingestion.run_ingestion "$@"
         ;;
 
     transform)
