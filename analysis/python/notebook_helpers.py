@@ -68,8 +68,14 @@ def render_sql(sql_template: str, **params: Any) -> str:
     return sql_template.format(**resolved)
 
 
-def run_sql(engine: Any, sql: str) -> pd.DataFrame:
-    return pd.read_sql(sql, engine)
+def run_sql(engine: Any, sql: str, empty_ok: bool = False) -> pd.DataFrame:
+    df = pd.read_sql(sql, engine)
+    if not empty_ok and df.empty:
+        raise ValueError(
+            f"Query returned 0 rows. Check your filter params.\n"
+            f"SQL (first 300 chars): {sql[:300]}"
+        )
+    return df
 
 
 def csv_filter(values: str | list[str] | None) -> str:

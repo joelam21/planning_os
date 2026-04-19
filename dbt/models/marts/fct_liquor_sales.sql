@@ -22,6 +22,8 @@ select
     estimated_total_cost,
     estimated_gross_profit,
 
+    upper(invoice_item_number) like 'RINV-%' as is_return,
+
     loaded_at
 
 from {{ ref('int_iowa_liquor_sales_deduped') }}

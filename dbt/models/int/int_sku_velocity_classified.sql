@@ -4,6 +4,7 @@ with classified_items as (
         total_units_sold,
         total_revenue,
         cumulative_units,
+        cumulative_revenue,
         state_total_units,
         state_total_revenue,
         active_sku_count,

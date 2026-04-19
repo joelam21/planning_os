@@ -296,7 +296,7 @@ def validate_data_contract(**context) -> None:
         raise ValueError(f"Unsupported source for data contract validation: {source!r}")
 
     params = _get_snowflake_connection_params()
-    schema = params["schema"]
+    raw_schema = _require_env("SNOWFLAKE_SCHEMA")
     database = params["database"]
 
     max_ingestion_lag_hours = _get_positive_int_env(
@@ -311,7 +311,7 @@ def validate_data_contract(**context) -> None:
             max(date) as max_order_date,
             max(loaded_at) as max_loaded_at,
             datediff('hour', max(loaded_at), current_timestamp()) as loaded_at_lag_hours
-        from {database}.{schema}.RAW_IOWA_LIQUOR
+        from {database}.{raw_schema}.RAW_IOWA_LIQUOR
         where date between to_date(%s) and to_date(%s)
     """
 
@@ -618,7 +618,7 @@ def compute_run_window(**context) -> None:
 
     Default behavior:
     - If start_date and end_date are provided in dag_run.conf, use them.
-    - Otherwise use a rolling 90-day window ending yesterday in UTC.
+    - Otherwise use a rolling 28-day window ending yesterday in UTC.
 
     Stores values in XCom for downstream tasks.
     """
@@ -637,12 +637,12 @@ def compute_run_window(**context) -> None:
         # Use yesterday as the end of the window to avoid partial current-day data
         end = now.subtract(days=1).start_of("day")
 
-        # Rolling 90-day window (inclusive)
-        start = end.subtract(days=89)
+        # Rolling 28-day window (inclusive)
+        start = end.subtract(days=27)
 
         start_date = start.to_date_string()
         end_date = end.to_date_string()
-        window_mode = "default_last_90_days"
+        window_mode = "default_last_28_days"
 
     source = conf.get("source", DEFAULT_SOURCE)
     batch_size = _get_positive_int_conf(conf, "batch_size", default_batch_size)
@@ -665,7 +665,6 @@ with DAG(
     schedule="0 9 * * 1",
     catchup=False,
     max_active_runs=1,
-    on_failure_callback=failure_callback,
     on_success_callback=success_callback_scheduled_only,
     default_args={
         "owner": "airflow",

@@ -1,3 +1,5 @@
+{{ config(tags=['critical']) }}
+
 -- Reconcile store-day aggregates in fct_store_daily_sales against base fact rows.
 -- Any returned row indicates aggregation drift.
 

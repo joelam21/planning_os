@@ -6,6 +6,7 @@ with sku_velocity as (
         ranked.total_units_sold,
         ranked.total_revenue,
         ranked.cumulative_units,
+        ranked.cumulative_revenue,
         ranked.state_total_units,
         ranked.state_total_revenue,
         ranked.active_sku_count,
