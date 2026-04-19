@@ -1,3 +1,5 @@
+{{ config(tags=['critical']) }}
+
 -- fct_store_daily_sales grain is store_number × order_date
 -- Any duplicate at this grain means the aggregation broke
 select

@@ -107,3 +107,51 @@ Usage notes:
 - Off-diagonal cases are analytically important because they reveal divergence between operational importance and commercial importance.
 - Tier membership is a decision-support heuristic, not a universal assortment rule.
 {% enddocs %}
+
+{% docs weekly_units_sold %}
+Weekly unit-demand metric at the item-by-week grain.
+
+Default definition:
+`sum(bottles_sold)` aggregated to `date_trunc('week', order_date), item_number`
+
+Usage notes:
+- This metric is zero-filled across the historical week spine before rolling averages are computed.
+- Return-labeled invoice rows are excluded from replenishment demand calculations in this repo.
+- It is intended for replenishment planning, not for financial reporting.
+{% enddocs %}
+
+{% docs trailing_avg_units %}
+Trailing average weekly unit-demand metric.
+
+Default definition:
+`avg(weekly_units_sold)` across a defined trailing week window
+
+Usage notes:
+- In this repo, the primary windows are trailing 4 full weeks and trailing 8 full weeks.
+- The averages are computed from a zero-filled weekly item history so intermittent-demand items are not overstated.
+- These metrics are decision-support baselines, not forecast accuracy guarantees.
+{% enddocs %}
+
+{% docs selected_baseline_units %}
+Chosen replenishment demand baseline expressed in units.
+
+Default definition:
+`greatest(0, trailing_4wk_avg_units, trailing_8wk_avg_units)`
+
+Usage notes:
+- The model intentionally selects the stronger recent baseline rather than averaging the two windows together.
+- Flooring at zero prevents negative or nonsensical replenishment recommendations.
+- This metric is an intermediate planning baseline before any safety buffer is applied.
+{% enddocs %}
+
+{% docs recommended_ship_qty %}
+Recommended replenishment shipment quantity in units.
+
+Default definition:
+`round(selected_baseline_units * 1.2, 0)`
+
+Usage notes:
+- In this repo, the default policy applies a fixed 20% safety buffer over the selected baseline.
+- The result is rounded to a whole-unit shipment recommendation.
+- This is a heuristic planning output and should be interpreted alongside category context and operational constraints.
+{% enddocs %}

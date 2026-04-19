@@ -13,18 +13,75 @@ EXPECTED_VENV="$PROJECT_ROOT/.venv"
 PROJECT_PYTHON="$EXPECTED_VENV/bin/python"
 PROJECT_SNOW="$EXPECTED_VENV/bin/snow"
 PROJECT_DBT="$EXPECTED_VENV/bin/dbt"
+ACTIVE_PYTHON="python"
+ACTIVE_SNOW="snow"
+ACTIVE_DBT="dbt"
+RUNTIME_MODE="unknown"
 
-COMMAND="${1:-help}"
-PIPELINE_INSERTED_ROWS=""
+resolve_runtime() {
+    if [ "${VIRTUAL_ENV:-}" = "$EXPECTED_VENV" ]; then
+        RUNTIME_MODE="project_venv"
+        ACTIVE_PYTHON="$PROJECT_PYTHON"
+        ACTIVE_SNOW="$PROJECT_SNOW"
+        ACTIVE_DBT="$PROJECT_DBT"
+        return 0
+    fi
 
-require_project_venv() {
-    if [ "${VIRTUAL_ENV:-}" != "$EXPECTED_VENV" ]; then
-        echo "[run] Project virtual environment is not active."
-        echo "[run] Expected: $EXPECTED_VENV"
-        echo "[run] Current:  ${VIRTUAL_ENV:-<none>}"
-        echo "[run] Run: source ./enter.sh"
+    if command -v python >/dev/null 2>&1 && command -v dbt >/dev/null 2>&1; then
+        RUNTIME_MODE="ambient"
+        ACTIVE_PYTHON="$(command -v python)"
+        ACTIVE_DBT="$(command -v dbt)"
+
+        if command -v snow >/dev/null 2>&1; then
+            ACTIVE_SNOW="$(command -v snow)"
+        else
+            ACTIVE_SNOW=""
+        fi
+        return 0
+    fi
+
+    echo "[run] No usable runtime found."
+    echo "[run] Expected local venv: $EXPECTED_VENV"
+    echo "[run] Current VIRTUAL_ENV: ${VIRTUAL_ENV:-<none>}"
+    echo "[run] Local use: source ./enter.sh"
+    echo "[run] Orchestrated use requires python and dbt on PATH."
+    exit 1
+}
+
+require_command() {
+    local binary_path="$1"
+    local command_name="$2"
+
+    if [ -z "$binary_path" ] || ! command -v "$binary_path" >/dev/null 2>&1; then
+        echo "[run] Required command not available: ${command_name}"
+        echo "[run] Runtime mode: ${RUNTIME_MODE}"
         exit 1
     fi
+}
+
+require_runtime_for_command() {
+    local requested_command="$1"
+
+    case "$requested_command" in
+        help)
+            ;;
+        doctor)
+            require_command "$ACTIVE_PYTHON" "python"
+            ;;
+        snow-test|snow-sql-test)
+            require_command "$ACTIVE_SNOW" "snow"
+            ;;
+        dbt-debug|transform|test)
+            require_command "$ACTIVE_DBT" "dbt"
+            ;;
+        ingest|pipeline)
+            require_command "$ACTIVE_PYTHON" "python"
+            require_command "$ACTIVE_DBT" "dbt"
+            ;;
+        *)
+            require_command "$ACTIVE_PYTHON" "python"
+            ;;
+    esac
 }
 
 print_pipeline_success() {
@@ -55,7 +112,11 @@ run_pipeline_command() {
     fi
 }
 
-require_project_venv
+COMMAND="${1:-help}"
+PIPELINE_INSERTED_ROWS=""
+
+resolve_runtime
+require_runtime_for_command "$COMMAND"
 
 case "$COMMAND" in
 
@@ -73,6 +134,8 @@ case "$COMMAND" in
         echo "  ./run.sh test          # Run dbt tests (dbt test)"
         echo "  ./run.sh pipeline      # ingest -> snapshot -> transform -> test"
         echo ""
+        echo "[run] Runtime mode: local .venv or any orchestrated environment with python/dbt on PATH"
+        echo ""
         ;;
 
     doctor)
@@ -82,51 +145,37 @@ case "$COMMAND" in
 
     snow-test)
         echo "[run] Listing Snowflake connections (CLI)"
-        "$PROJECT_SNOW" connection list
+        "$ACTIVE_SNOW" connection list
         ;;
 
     snow-sql-test)
         # Use SNOW_CONNECTION if set, otherwise prefer "my_snowflake" (your current default)
         SNOW_CONNECTION="${SNOW_CONNECTION:-my_snowflake}"
         echo "[run] Running Snowflake SQL health check using connection: ${SNOW_CONNECTION}"
-        "$PROJECT_SNOW" sql -c "${SNOW_CONNECTION}" -q "select current_user(), current_role(), current_warehouse();"
+        "$ACTIVE_SNOW" sql -c "${SNOW_CONNECTION}" -q "select current_user(), current_role(), current_warehouse();"
         ;;
 
     dbt-debug)
         echo "[run] Running dbt debug"
-        "$PROJECT_DBT" debug
+        "$ACTIVE_DBT" debug --project-dir "$PROJECT_ROOT"
         ;;
 
     ingest)
+        # Optional args (--source, --start-date, --end-date, --batch-size, --max-batches)
+        # are forwarded directly to the ingestion runner.
+        shift
         echo "[run] Running ingestion step"
-        # Convention: prefer a project-local ingestion script if present.
-        # You can implement one of these later:
-        #   - ./ingestion/run_ingestion.sh
-        #   - ./ingestion/run_ingestion.py
-        #   - ./ingestion/scripts/run.py
-        if [ -x "./ingestion/run_ingestion.sh" ]; then
-            ./ingestion/run_ingestion.sh
-        elif [ -f "./ingestion/run_ingestion.py" ]; then
-            "$PROJECT_PYTHON" -m ingestion.run_ingestion
-        elif [ -f "./ingestion/scripts/run.py" ]; then
-            "$PROJECT_PYTHON" ./ingestion/scripts/run.py
-        else
-            echo "[run] No ingestion runner found. Create one of:"
-            echo "  ./ingestion/run_ingestion.sh (preferred)"
-            echo "  ./ingestion/run_ingestion.py"
-            echo "  ./ingestion/scripts/run.py"
-            exit 2
-        fi
+        "$ACTIVE_PYTHON" -m ingestion.run_ingestion "$@"
         ;;
 
     transform)
         echo "[run] Running dbt models (transform)"
-        "$PROJECT_DBT" run
+        "$ACTIVE_DBT" run --project-dir "$PROJECT_ROOT"
         ;;
 
     test)
         echo "[run] Running dbt tests"
-        "$PROJECT_DBT" test
+        "$ACTIVE_DBT" test --project-dir "$PROJECT_ROOT"
         ;;
 
     pipeline)
@@ -172,7 +221,7 @@ case "$COMMAND" in
         echo "[run] Running full pipeline: ingest -> snapshot -> transform -> test"
 
         echo "[run] Running ingestion step"
-        INGEST_CMD=("$PROJECT_PYTHON" -m ingestion.run_ingestion --source "$PIPELINE_SOURCE")
+        INGEST_CMD=("$ACTIVE_PYTHON" -m ingestion.run_ingestion --source "$PIPELINE_SOURCE")
 
         if [[ -n "$PIPELINE_START_DATE" ]]; then
             INGEST_CMD+=(--start-date "$PIPELINE_START_DATE")
@@ -197,13 +246,13 @@ case "$COMMAND" in
         PIPELINE_INSERTED_ROWS="$(printf '%s\n' "$INGEST_OUTPUT" | sed -n 's/.*Inserted \([0-9][0-9]*\) rows.*/\1/p' | tail -n 1)"
 
         echo "[run] Running snapshots"
-        run_pipeline_command "snapshots" "$PROJECT_DBT" snapshot
+        run_pipeline_command "snapshots" "$ACTIVE_DBT" snapshot --project-dir "$PROJECT_ROOT"
 
         echo "[run] Running dbt models (transform)"
-        run_pipeline_command "transform" "$PROJECT_DBT" run
+        run_pipeline_command "transform" "$ACTIVE_DBT" run --project-dir "$PROJECT_ROOT"
 
         echo "[run] Running dbt tests"
-        run_pipeline_command "test" "$PROJECT_DBT" test
+        run_pipeline_command "test" "$ACTIVE_DBT" test --project-dir "$PROJECT_ROOT"
         print_pipeline_success
         ;;
 

@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: int_replenishment_weekly_depletions
+    description: "Intermediate replenishment history model that builds a zero-filled 8-week item-by-week depletion grid for active SKUs before rolling average calculations. Grain is one row per item_number per week_start."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+
+      - name: week_start
+        description: "Week start date representing one full historical replenishment week in the 8-week lookback window."
+        tests:
+          - not_null
+
+      - name: weekly_units_sold
+        description: "{{ doc('weekly_units_sold') }}"
+        tests:
+          - not_null
+
+  - name: int_replenishment_rolling_metrics
+    description: "Intermediate replenishment metrics model that computes trailing 4-week and trailing 8-week average unit demand from the zero-filled weekly history. Grain is one row per item_number."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+
+      - name: trailing_4wk_avg_units
+        description: "{{ doc('trailing_avg_units') }}"
+        tests:
+          - not_null
+
+      - name: trailing_8wk_avg_units
+        description: "{{ doc('trailing_avg_units') }}"
+        tests:
+          - not_null
+
+  - name: int_replenishment_baseline_forecast
+    description: "Intermediate replenishment forecast model that selects the stronger trailing demand baseline and applies the fixed safety buffer before the final mart adds item attributes. Grain is one row per item_number."
+    columns:
+      - name: item_number
+        description: "{{ doc('item_number') }}"
+        tests:
+          - not_null
+          - unique
+
+      - name: selected_baseline_units
+        description: "{{ doc('selected_baseline_units') }}"
+        tests:
+          - not_null
+
+      - name: recommended_ship_qty
+        description: "{{ doc('recommended_ship_qty') }}"
+        tests:
+          - not_null

@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from datetime import datetime, UTC
 
@@ -6,6 +7,9 @@ from datetime import datetime, UTC
 API_URL = "https://data.iowa.gov/resource/m3tr-qhgy.json"
 DEFAULT_BATCH_SIZE = 500
 DEFAULT_MAX_BATCHES = 50
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+DEFAULT_REQUEST_MAX_RETRIES = 4
+DEFAULT_REQUEST_BACKOFF_BASE_SECONDS = 2
 
 
 def fetch_rows(
@@ -37,6 +41,18 @@ def fetch_rows(
     offset = 0
     batch_count = 0
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    request_timeout_seconds = int(
+        os.getenv("PLANNING_OS_IOWA_REQUEST_TIMEOUT_SECONDS", str(DEFAULT_REQUEST_TIMEOUT_SECONDS))
+    )
+    request_max_retries = int(
+        os.getenv("PLANNING_OS_IOWA_REQUEST_MAX_RETRIES", str(DEFAULT_REQUEST_MAX_RETRIES))
+    )
+    request_backoff_base_seconds = int(
+        os.getenv(
+            "PLANNING_OS_IOWA_REQUEST_BACKOFF_BASE_SECONDS",
+            str(DEFAULT_REQUEST_BACKOFF_BASE_SECONDS),
+        )
+    )
 
     while batch_count < max_batches:
         params = {
@@ -49,9 +65,41 @@ def fetch_rows(
         if where_clauses:
             params["$where"] = " AND ".join(where_clauses)
 
-        response = requests.get(API_URL, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        data: list[dict] | None = None
+        for request_attempt in range(1, request_max_retries + 1):
+            try:
+                response = requests.get(API_URL, params=params, timeout=request_timeout_seconds)
+                response.raise_for_status()
+                data = response.json()
+                break
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                if request_attempt == request_max_retries:
+                    raise
+
+                backoff_seconds = request_backoff_base_seconds * (2 ** (request_attempt - 1))
+                print(
+                    "[iowa_liquor] transient network error "
+                    f"(attempt {request_attempt}/{request_max_retries}, "
+                    f"offset={offset}, limit={batch_size}): {exc}. "
+                    f"retrying in {backoff_seconds}s"
+                )
+                time.sleep(backoff_seconds)
+            except requests.exceptions.HTTPError:
+                status_code = response.status_code
+                if status_code < 500 or request_attempt == request_max_retries:
+                    raise
+
+                backoff_seconds = request_backoff_base_seconds * (2 ** (request_attempt - 1))
+                print(
+                    "[iowa_liquor] upstream 5xx error "
+                    f"(attempt {request_attempt}/{request_max_retries}, "
+                    f"offset={offset}, limit={batch_size}, status={status_code}). "
+                    f"retrying in {backoff_seconds}s"
+                )
+                time.sleep(backoff_seconds)
+
+        if data is None:
+            raise RuntimeError("Iowa API request failed without response payload")
 
         if not data:
             break

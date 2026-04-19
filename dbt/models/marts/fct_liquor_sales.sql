@@ -3,7 +3,7 @@
         materialized='incremental',
         unique_key='invoice_item_number',
         incremental_strategy='merge',
-        on_schema_change='fail'
+        on_schema_change='append_new_columns'
     )
 }}
 
@@ -21,6 +21,8 @@ select
     volume_sold_gallons,
     estimated_total_cost,
     estimated_gross_profit,
+
+    upper(invoice_item_number) like 'RINV-%' as is_return,
 
     loaded_at
 

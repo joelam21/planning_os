@@ -2,13 +2,36 @@
 
 ## Business Question
 
-Which products are driving the business — and what's getting in the way of seeing it clearly?
+planning_os is an end-to-end analytics system built to answer a core planning question:
 
-That question shows up in every retail and CPG context. The answer requires looking at the same data from two angles simultaneously: the market dynamics that determine which vendors and categories are winning, and the operational structure that determines which SKUs are earning their place on the shelf.
+Which products are actually driving the business — and what makes that hard to see clearly?
 
-`planning_os` is an end-to-end analytics system built to answer both questions from a single, well-designed data infrastructure — without rebuilding logic for each view.
+The system combines market dynamics (vendor and category performance) with operational structure (SKU-level productivity) into a single, consistent data model, eliminating the need to rebuild logic for each analytical view.
 
 ---
+
+## System Intent
+
+planning_os is not just a data pipeline. It is a reliability-first analytics system designed to operate on lagged, mostly well-structured, but occasionally incomplete real-world data.
+
+The distinguishing design choice in this system is that source data latency — along with occasional incompleteness and edge-case anomalies — is treated as a first-class constraint rather than an edge case.
+
+The system is built around three core principles:
+
+- Separation of concerns — ingestion, transformation, and analysis are decoupled but coordinated
+- Reproducibility — all logic is parameterized and version-controlled
+- Reliability under latency — the system is designed for delayed source data, occasional incompleteness, and edge-case anomalies
+
+Orchestration (Airflow) is used not only to schedule execution, but to enforce:
+
+- ordered execution of dependent steps
+- bounded reprocessing windows
+- validation and quality gates between stages
+- safe retry behavior without data duplication
+
+This ensures the pipeline produces consistent outputs even when upstream data is imperfect.
+
+The pipeline is designed to fail loudly and deterministically when assumptions are violated, rather than silently producing incorrect outputs.
 
 ## What This Project Demonstrates
 
@@ -73,7 +96,10 @@ Iowa Liquor Sales API
     → Python Ingestion (parameterized, batched)
     → Snowflake RAW schema
     → dbt (staging → intermediate → marts → snapshots)
-    → Analysis (Jupyter notebooks + reusable chart and SQL layers)
+    → Analysis layer (Jupyter notebooks + reusable SQL and chart abstractions)
+
+Coordinated by:
+    → Airflow orchestration (windowing, validation, retries, tests, health checks)
 ```
 
 ### Components
@@ -125,6 +151,8 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 
 ## Known Data Limitations and Modeling Decisions
 
+The source dataset is generally well-structured and consistent, but it exhibits meaningful latency and a small number of edge-case anomalies that must be handled explicitly.
+
 **Sell-in vs. sell-through:** The dataset represents store purchases from the state (wholesale sell-in), not consumer purchases (sell-through). Daily data reflects ordering behavior, not consumer demand. Weekly and monthly aggregation is more appropriate for demand-style analysis. Raw source data is preserved in the PLANNING_OS.RAW schema before transformation, allowing reprocessing from source without re-ingestion.
 
 **Returns handling:** Source data includes legitimate return invoices identified by invoice numbers starting with RINV-. Return rows are typically negative. A custom data quality test (`assert_negative_values_must_be_returns`) ensures negative values only appear on RINV invoices. Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` and monitored periodically — rare but preserved to maintain data lineage.
@@ -148,6 +176,12 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 - Type 2 SCD snapshots for store and item history
 - Current-state Type 1 dimensions derived from snapshots
 - Engineered dimensions: category families, store chains, price position segments
+
+**Orchestration:**
+- Airflow serves as the control layer coordinating ingestion, validation, transformation, testing, and pipeline health monitoring
+- Scheduled runs use a rolling 90-day refresh window to account for delayed source data
+- Manual overrides support targeted backfills and repair workflows
+- Retry behavior is safe due to bounded ingestion windows and overwrite-based reprocessing
 
 **Data quality:**
 - Return-aware quality policy implemented (`assert_negative_values_must_be_returns`)
@@ -173,7 +207,7 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 
 ## Next Steps
 
-- Add Airflow orchestration — DAG to automate the weekly ingestion → dbt build → dbt test → monitoring sequence
+- Harden orchestration from a working pipeline into an operational system with stronger runtime validation, alerting, and run-level monitoring
 - Synthetic demand layer — simulate consumer demand from sell-in patterns to enable inventory position modeling
 - NRF 4-5-4 fiscal calendar dimension — enable period-comparable analysis across the standard retail planning calendar
 - Store-level planning simulation — model replenishment at the store level for a subset of stores across different demand profiles
@@ -181,6 +215,8 @@ The Iowa source dataset contains limited native dimensions. Three key dimensions
 ---
 
 ## Quickstart
+
+### Local development
 
 ```bash
 # Enter environment
@@ -196,10 +232,77 @@ source ./enter.sh
 ./run.sh dbt-debug
 ```
 
+### Orchestration (Airflow)
+
+```bash
+# Start Airflow locally
+cd orchestration/airflow
+docker compose up -d
+
+# Access Airflow UI
+http://localhost:8080
+```
+
 ## Dependencies
 
 - `requirements.txt` → curated direct dependencies used to install the project cleanly
 - `requirements-lock.txt` → exact resolved environment for reproducibility
+
+## Airflow Runtime Notes
+
+- Airflow uses a custom Docker image at `orchestration/airflow/Dockerfile`
+- The dbt profile is mounted at `/opt/airflow/.dbt`
+- Airflow credentials are sourced from the repository root `.env`
+- Airflow runtime dependencies are intentionally minimal and defined in `orchestration/airflow/requirements-airflow.txt`
+
+### Weekly DAG Operational Notes
+
+- The `planning_os_weekly` DAG validates the raw ingestion window directly against `RAW_IOWA_LIQUOR` before dbt execution continues
+- Raw-layer window validation checks the landed `date` column in `RAW_IOWA_LIQUOR`, not a downstream `order_date` alias
+- Final DAG state is tied to critical-path task outcomes so a run is not reported as successful when ingestion or validation fails
+- Iowa API requests use bounded request-level retries with exponential backoff inside ingestion, which hardens the pipeline against transient upstream disconnects and timeouts
+
+Relevant retry settings in `.env`:
+
+- `PLANNING_OS_IOWA_REQUEST_TIMEOUT_SECONDS` → per-request timeout for Iowa API calls
+- `PLANNING_OS_IOWA_REQUEST_MAX_RETRIES` → max retry attempts for transient request failures
+- `PLANNING_OS_IOWA_REQUEST_BACKOFF_BASE_SECONDS` → base seconds used for exponential backoff between retries
+
+## Phase 2: Orchestration Integration
+
+Once the local Airflow foundation was verified, the work shifted from platform setup to runtime integration. At that point, the question was no longer just whether Airflow could run — it became whether Airflow could run *this project* reliably.
+
+### What was added
+
+- A production-style Airflow DAG (`planning_os_weekly`) coordinating ingestion, validation, dbt freshness, dbt build, testing, pipeline health checks, and run summary publication
+- A custom Airflow image with a deliberately minimal runtime dependency set rather than the full project development environment
+- An Airflow-specific dbt profile mounted into the container at `/opt/airflow/.dbt`
+- Environment-driven credential loading from the repository root `.env`
+- A refactored `run.sh` command surface that supports both local `.venv` usage and orchestrated container execution
+
+### Design decisions that emerged during implementation
+
+**Airflow runtime is not the same as the full project runtime**
+
+Installing the full project `requirements.txt` into the Airflow image introduced dependency conflicts and broke Airflow itself. The final design uses a separate `requirements-airflow.txt` to keep the orchestration runtime stable, minimal, and intentional.
+
+**Orchestration depends on reliable command boundaries**
+
+The original `run.sh` assumptions were valid for local development but too strict for orchestration because they required the local project virtual environment to be active. Refactoring `run.sh` to support both local and container execution made the command surface durable enough for Airflow to call directly.
+
+**Source behavior should drive windowing strategy**
+
+The Iowa Liquor dataset is relatively clean, but it exhibits meaningful latency. That made the reliability problem primarily one of delayed availability rather than widespread data corruption. The default ingestion strategy was therefore changed from a narrow weekly slice to a rolling 90-day reprocessing window ending yesterday, while preserving manual `start_date` / `end_date` overrides for targeted backfills.
+
+### What this phase demonstrated
+
+This phase proved that the project can now run as an orchestrated analytics system rather than a collection of manually executed commands. It validated:
+
+- ordered task execution across ingestion, transformation, and validation layers
+- safe retry behavior with bounded overwrite-based reprocessing
+- dbt and Snowflake execution inside the Airflow runtime
+- environment-aware command execution through a single canonical `run.sh` interface
+- documentation and runtime behavior aligned around reliability under source latency
 
 ---
 
@@ -236,6 +339,21 @@ Full lineage from `RAW_IOWA_LIQUOR` to analytical output is defined in [`dbt/mod
 ---
 
 ## Pipeline Health
+
+The pipeline defines an explicit contract for what constitutes a valid run and enforces it through layered validation and monitoring.
+
+### Ingestion Window Strategy
+
+The source dataset is generally clean but exhibits material latency, so new records may arrive weeks after their effective transaction date.
+
+To ensure completeness and consistency, the pipeline uses a rolling reprocessing window:
+
+- Default scheduled runs reload the most recent 90-day window ending yesterday
+- Manual runs may specify `start_date` and `end_date` for targeted backfills
+
+Because ingestion overwrites data within the specified window, repeated runs safely refresh historical slices without creating duplication.
+
+This approach trades additional compute for improved data completeness and reliability, which is a deliberate choice given the characteristics of the source system.
 
 ### What constitutes a healthy weekly run
 
