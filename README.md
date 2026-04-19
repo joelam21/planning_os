@@ -179,7 +179,7 @@ The source dataset is generally well-structured and consistent, but it exhibits 
 
 **Orchestration:**
 - Airflow serves as the control layer coordinating ingestion, validation, transformation, testing, and pipeline health monitoring
-- Scheduled runs use a rolling 90-day refresh window to account for delayed source data
+- Scheduled runs use a rolling 28-day refresh window to account for delayed source data
 - Manual overrides support targeted backfills and repair workflows
 - Retry behavior is safe due to bounded ingestion windows and overwrite-based reprocessing
 
@@ -292,7 +292,7 @@ The original `run.sh` assumptions were valid for local development but too stric
 
 **Source behavior should drive windowing strategy**
 
-The Iowa Liquor dataset is relatively clean, but it exhibits meaningful latency. That made the reliability problem primarily one of delayed availability rather than widespread data corruption. The default ingestion strategy was therefore changed from a narrow weekly slice to a rolling 90-day reprocessing window ending yesterday, while preserving manual `start_date` / `end_date` overrides for targeted backfills.
+The Iowa Liquor dataset is relatively clean, but it exhibits meaningful latency. That made the reliability problem primarily one of delayed availability rather than widespread data corruption. The default ingestion strategy was therefore changed from a narrow weekly slice to a rolling 28-day reprocessing window ending yesterday, while preserving manual `start_date` / `end_date` overrides for targeted backfills.
 
 ### What this phase demonstrated
 
@@ -348,7 +348,7 @@ The source dataset is generally clean but exhibits material latency, so new reco
 
 To ensure completeness and consistency, the pipeline uses a rolling reprocessing window:
 
-- Default scheduled runs reload the most recent 90-day window ending yesterday
+- Default scheduled runs reload the most recent 28-day window ending yesterday
 - Manual runs may specify `start_date` and `end_date` for targeted backfills
 
 Because ingestion overwrites data within the specified window, repeated runs safely refresh historical slices without creating duplication.
@@ -374,16 +374,18 @@ A run is considered **healthy** when all of the following pass:
 
 ```bash
 dbt source freshness
-dbt build
+dbt run
+dbt test --select tag:critical
+dbt test
 snow sql -c my_snowflake -q "select * from PLANNING_OS.DEV.MON_PIPELINE_HEALTH"
 ```
 
 ### Scheduled weekly run (example)
 
-Use the parameterized pipeline command to run a bounded ingestion window plus snapshot/transform/test:
+The DAG handles orchestration automatically. For a manual backfill or targeted reprocessing window, trigger the DAG with `dag_run.conf` or run ingestion directly:
 
 ```bash
-./run.sh pipeline \
+./run.sh ingest \
   --source iowa_liquor \
   --start-date 2021-08-01 \
   --end-date 2021-08-07 \
