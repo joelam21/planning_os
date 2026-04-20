@@ -112,7 +112,7 @@ Coordinated by:
   - `marts` → tables (pre-computed for query performance)
   - `snapshots` → tables (Type 2 SCD history)
 - **Analysis**: Jupyter notebooks backed by reusable SQL templates and Python chart helpers — business logic stays versioned outside notebook cells
-- **CI/CD**: GitHub Actions workflow builds a CI-specific dbt environment, runs staged model execution, snapshots, marts build, singular tests, and source freshness checks
+- **CI/CD**: GitHub Actions workflow builds a CI-specific dbt environment, runs staged model execution, snapshots, marts and monitoring builds, critical test gate, full test suite, and source freshness checks
 
 ---
 
@@ -332,7 +332,7 @@ The pipeline enforces correctness at every layer:
 | Staging | Schema tests — `not_null`, `unique`, `relationships` |
 | Intermediate | Deduplication audit, return-aware sign policy, temporal integrity of item version history |
 | Marts | Grain integrity, reconciliation, business rules |
-| CI | Staged model run across all layers, critical test gate, full test suite on every push to `dev` |
+| CI | Staged model run across all layers (including monitoring), critical test gate, full test suite on every push to `dev` |
 
 Full lineage from `RAW_IOWA_LIQUOR` to analytical output is defined in [`dbt/models/exposures.yml`](./dbt/models/exposures.yml).
 
@@ -373,7 +373,7 @@ A run is considered **healthy** when all of the following pass:
 ### Run sequence
 
 ```bash
-dbt source freshness
+dbt snapshot
 dbt run
 dbt test --select tag:critical
 dbt test

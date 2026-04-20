@@ -107,9 +107,24 @@ jobs:
             --target ci
 
       - name: dbt run — marts layer
+        # --full-refresh is required here because fct_liquor_sales is an incremental
+        # model. Without it, the CI schema accumulates rows across runs while
+        # int_item_business_history is rebuilt fresh each run from the current
+        # ingestion window. That divergence causes the item history coverage test
+        # to fail on items that appeared in earlier CI runs but not the current window.
+        #
+        # Long-term fix: use per-run CI schemas (e.g. CI_<run_id>) so each run
+        # starts from a clean slate without needing --full-refresh.
         run: |
           dbt run \
             --select marts \
+            --full-refresh \
+            --target ci
+
+      - name: dbt run — monitoring layer
+        run: |
+          dbt run \
+            --select monitoring \
             --target ci
 
       - name: dbt test — critical gate
