@@ -207,7 +207,6 @@ The source dataset is generally well-structured and consistent, but it exhibits 
 
 ## Next Steps
 
-- Harden orchestration from a working pipeline into an operational system with stronger runtime validation, alerting, and run-level monitoring
 - Synthetic demand layer — simulate consumer demand from sell-in patterns to enable inventory position modeling
 - NRF 4-5-4 fiscal calendar dimension — enable period-comparable analysis across the standard retail planning calendar
 - Store-level planning simulation — model replenishment at the store level for a subset of stores across different demand profiles
@@ -274,7 +273,7 @@ Once the local Airflow foundation was verified, the work shifted from platform s
 
 ### What was added
 
-- A production-style Airflow DAG (`planning_os_weekly`) coordinating ingestion, validation, dbt freshness, dbt build, testing, pipeline health checks, and run summary publication
+- A production-style Airflow DAG (`planning_os_weekly`) coordinating ingestion, validation, dbt source freshness, snapshots, dbt run, staged test gate, pipeline health checks, and run summary publication
 - A custom Airflow image with a deliberately minimal runtime dependency set rather than the full project development environment
 - An Airflow-specific dbt profile mounted into the container at `/opt/airflow/.dbt`
 - Environment-driven credential loading from the repository root `.env`
@@ -308,12 +307,12 @@ This phase proved that the project can now run as an orchestrated analytics syst
 
 ## Canonical Metrics
 
-The repo now defines a small canonical metrics layer in [`dbt/models/docs/metric_definitions.md`](./dbt/models/docs/metric_definitions.md) so the same business metrics are described consistently across models and analyses.
+The repo defines shared metric definitions in [`dbt/models/docs/metric_definitions.md`](./dbt/models/docs/metric_definitions.md) so business metrics are specified once and referenced consistently across models, SQL templates, and notebooks.
 
 Core metrics include:
 - `sales` → `sum(sale_dollars)`
 - `units` → `sum(bottles_sold)`
-- `avg_selling_price` → `sum(sale_dollars) / sum(bottles_sold)`
+- `avg_selling_price` → `sum(sale_dollars) / nullif(sum(bottles_sold), 0)`
 - `gross_profit` → estimated gross profit proxy from sales less bottle cost
 - `share_pct` and `vendor_share` → share-of-total metrics with explicit scope
 - `yoy_growth_pct` and `cagr` → standardized growth-rate definitions for time-window comparisons
@@ -332,7 +331,7 @@ The pipeline enforces correctness at every layer:
 | Staging | Schema tests — `not_null`, `unique`, `relationships` |
 | Intermediate | Deduplication audit, return-aware sign policy |
 | Marts | Grain integrity, reconciliation, business rules |
-| CI | Staged dbt build across all layers on every push to `dev` |
+| CI | Staged model run across all layers, critical test gate, full test suite on every push to `dev` |
 
 Full lineage from `RAW_IOWA_LIQUOR` to analytical output is defined in [`dbt/models/exposures.yml`](./dbt/models/exposures.yml).
 

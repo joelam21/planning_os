@@ -132,7 +132,7 @@ case "$COMMAND" in
         echo "  ./run.sh ingest        # Run ingestion step (project-local)"
         echo "  ./run.sh transform     # Run dbt models (dbt run)"
         echo "  ./run.sh test          # Run dbt tests (dbt test)"
-        echo "  ./run.sh pipeline      # ingest -> snapshot -> transform -> test"
+        echo "  ./run.sh pipeline      # ingest -> snapshot -> transform -> test:critical -> test"
         echo ""
         echo "[run] Runtime mode: local .venv or any orchestrated environment with python/dbt on PATH"
         echo ""
@@ -218,7 +218,7 @@ case "$COMMAND" in
             esac
         done
 
-        echo "[run] Running full pipeline: ingest -> snapshot -> transform -> test"
+        echo "[run] Running full pipeline: ingest -> snapshot -> transform -> test:critical -> test"
 
         echo "[run] Running ingestion step"
         INGEST_CMD=("$ACTIVE_PYTHON" -m ingestion.run_ingestion --source "$PIPELINE_SOURCE")
@@ -251,7 +251,10 @@ case "$COMMAND" in
         echo "[run] Running dbt models (transform)"
         run_pipeline_command "transform" "$ACTIVE_DBT" run --project-dir "$PROJECT_ROOT"
 
-        echo "[run] Running dbt tests"
+        echo "[run] Running dbt tests (critical gate)"
+        run_pipeline_command "test:critical" "$ACTIVE_DBT" test --select tag:critical --project-dir "$PROJECT_ROOT"
+
+        echo "[run] Running dbt tests (full)"
         run_pipeline_command "test" "$ACTIVE_DBT" test --project-dir "$PROJECT_ROOT"
         print_pipeline_success
         ;;

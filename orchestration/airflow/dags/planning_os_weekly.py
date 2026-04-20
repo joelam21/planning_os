@@ -22,7 +22,8 @@ PIPELINE_FAILURE_TASK_IDS = [
     "ingest_iowa_liquor",
     "validate_data_contract",
     "dbt_source_freshness",
-    "dbt_build",
+    "dbt_snapshot",
+    "dbt_run",
     "dbt_test_critical",
     "dbt_test_full",
     "pipeline_health_check",
@@ -502,13 +503,13 @@ def persist_run_summary(**context) -> None:
     freshness_status = ti.xcom_pull(task_ids="pipeline_health_check", key="freshness_status") or "unknown"
     snapshot_status = ti.xcom_pull(task_ids="pipeline_health_check", key="snapshot_status") or "unknown"
 
-    # dbt_build_status
+    # dbt_run_status
     dbt_build_status = "unknown"
     try:
         if dag_run:
-            dbt_build_ti = dag_run.get_task_instance("dbt_build")
-            if dbt_build_ti:
-                dbt_build_status = dbt_build_ti.state or "unknown"
+            dbt_run_ti = dag_run.get_task_instance("dbt_run")
+            if dbt_run_ti:
+                dbt_build_status = dbt_run_ti.state or "unknown"
     except Exception:
         pass
 
@@ -715,8 +716,16 @@ with DAG(
         """,
     )
 
-    dbt_build = BashOperator(
-        task_id="dbt_build",
+    dbt_snapshot = BashOperator(
+        task_id="dbt_snapshot",
+        bash_command="""
+        cd /opt/planning_os && \
+        dbt snapshot
+        """,
+    )
+
+    dbt_run = BashOperator(
+        task_id="dbt_run",
         bash_command="""
         cd /opt/planning_os && \
         dbt run
@@ -764,7 +773,8 @@ with DAG(
         >> ingest_iowa_liquor
         >> validate_data_contract_task
         >> dbt_source_freshness
-        >> dbt_build
+        >> dbt_snapshot
+        >> dbt_run
         >> dbt_test_critical
         >> dbt_test_full
         >> pipeline_health_check
