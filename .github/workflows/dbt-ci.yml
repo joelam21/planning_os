@@ -121,6 +121,12 @@ jobs:
             --full-refresh \
             --target ci
 
+      - name: dbt run — monitoring layer
+        run: |
+          dbt run \
+            --select monitoring \
+            --target ci
+
       - name: dbt test — critical gate
         run: |
           dbt test \
