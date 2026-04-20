@@ -96,7 +96,6 @@ with_pricing as (
 
 select
     *,
-    price_per_100ml_tier as normalized_price_tier,
     case
         when retail_price_tier = 'unknown' or price_per_100ml_tier = 'unknown' or package_size_tier = 'unknown' then 'unknown'
         when is_bundle_pack then 'bundle_pack'

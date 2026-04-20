@@ -20,6 +20,5 @@ select
     price_per_100ml,
     retail_price_tier,
     price_per_100ml_tier,
-    normalized_price_tier,
     price_position_segment
 from {{ ref('int_item_business_pricing_history') }}

@@ -22,7 +22,7 @@ select
     estimated_total_cost,
     estimated_gross_profit,
 
-    upper(invoice_item_number) like 'RINV-%' as is_return,
+    is_return,
 
     loaded_at
 

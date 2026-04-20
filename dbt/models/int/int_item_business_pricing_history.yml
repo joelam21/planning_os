@@ -35,8 +35,5 @@ models:
       - name: price_per_100ml_tier
         description: "Historical normalized price band based on price_per_100ml."
 
-      - name: normalized_price_tier
-        description: "Alias for price_per_100ml_tier."
-
       - name: price_position_segment
         description: "Intermediate strategic price segment derived from bottle price, normalized price, and package size."

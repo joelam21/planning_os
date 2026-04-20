@@ -130,11 +130,6 @@ models:
                   - 12_to_20
                   - 20_plus
 
-      - name: normalized_price_tier
-        description: "Analyst-friendly alias for price_per_100ml_tier."
-        tests:
-          - not_null
-
       - name: price_position_segment
         description: "Analyst-facing strategic price segment derived from bottle price and normalized price."
         tests:
