@@ -1,11 +1,11 @@
 {{ config(tags=['critical']) }}
 
--- Every fact row must join to exactly one row in int_item_business_history.
--- Zero matches means a fact item has no history record (data gap).
--- Multiple matches means validity windows overlap (caught separately, but cross-validated here).
+-- Every fact row must join to at least one row in int_item_business_history.
+-- Zero matches means a fact item has no history record for that order_date (data gap).
+-- Multiple matches (overlapping windows) are caught separately by
+-- assert_int_item_business_history_no_overlapping_windows.
 --
--- Failures here indicate either missing item history or a broken point-in-time join,
--- both of which would corrupt any analysis that uses historical item attributes.
+-- This test only catches genuine coverage gaps: fact rows with no matching history.
 
 with fact_join_counts as (
     select
@@ -27,4 +27,4 @@ select
     order_date,
     matching_history_rows
 from fact_join_counts
-where matching_history_rows != 1
+where matching_history_rows = 0
