@@ -19,6 +19,19 @@ with sku_velocity as (
         on ranked.item_number = dim_item.item_number
 )
 
-select *
+select
+    item_number,
+    item_description,
+    category_name,
+    total_units_sold,
+    total_revenue,
+    cumulative_units,
+    cumulative_revenue,
+    state_total_units,
+    state_total_revenue,
+    active_sku_count,
+    cumulative_volume_pct,
+    cumulative_revenue_pct,
+    sku_tier_volume,
+    sku_tier_revenue
 from sku_velocity
-order by total_units_sold desc

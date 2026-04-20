@@ -155,11 +155,11 @@ The source dataset is generally well-structured and consistent, but it exhibits 
 
 **Sell-in vs. sell-through:** The dataset represents store purchases from the state (wholesale sell-in), not consumer purchases (sell-through). Daily data reflects ordering behavior, not consumer demand. Weekly and monthly aggregation is more appropriate for demand-style analysis. Raw source data is preserved in the PLANNING_OS.RAW schema before transformation, allowing reprocessing from source without re-ingestion.
 
-**Returns handling:** Source data includes legitimate return invoices identified by invoice numbers starting with RINV-. Return rows are typically negative. A custom data quality test (`assert_negative_values_must_be_returns`) ensures negative values only appear on RINV invoices. Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` and monitored periodically — rare but preserved to maintain data lineage.
+**Returns handling:** Source data includes legitimate return invoices identified by invoice numbers starting with RINV-. Return rows are typically negative. An `is_return` flag is derived in the intermediate layer (`int_iowa_liquor_sales_deduped`) and carried through to the atomic fact. A custom data quality test (`assert_negative_values_must_be_returns`) ensures negative values only appear on RINV invoices. Anomalous returns (positive RINV records) are identified in `int_anomalous_returns` and monitored periodically — rare but preserved to maintain data lineage.
 
 **Bundle pack exclusion:** Bundle and multi-pack items are excluded from price-per-100ml calculations — a single transaction representing a large pack at an inflated per-unit price would distort the price tier classification. Bundle packs are flagged separately in the historical item dimension and may be grouped into `bulk_or_bundle` in analysis-layer visuals.
 
-**Historical pricing logic:** Item attributes — including price — change over time. The intermediate history and pricing layers capture attribute history with business-effective dating and derive normalized price semantics before exposing them through `dim_item_business_history`, allowing analysis to use the price that was true at the time of each transaction rather than only the current price.
+**Historical pricing logic:** Item attributes — including price — change over time. The intermediate history and pricing layers capture attribute history with business-effective dating, package-size normalization, and price position segmentation before exposing them through `dim_item_business_history`, allowing analysis to use the price that was true at the time of each transaction rather than only the current price. Temporal integrity of the version history is enforced by four dedicated tests covering window overlaps, current-row uniqueness, version grain, and fact join coverage.
 
 **Duplicate invoice handling:** The intermediate layer deduplicates invoice lines before fact construction — the source occasionally contains duplicate records that would distort aggregations if not removed.
 
@@ -188,6 +188,7 @@ The source dataset is generally well-structured and consistent, but it exhibits 
 - Anomalous returns monitoring (`int_anomalous_returns`)
 - Unlabeled negative return monitoring (`int_unlabeled_negative_returns`)
 - Grain integrity, reconciliation, and date coverage tests
+- Temporal integrity tests for item business history (overlapping windows, current-row uniqueness, version grain, fact join coverage)
 - Pipeline health monitoring view (`MON_PIPELINE_HEALTH`)
 - Deduplicated intermediate invoice layer protecting downstream fact grain integrity
 
@@ -207,7 +208,6 @@ The source dataset is generally well-structured and consistent, but it exhibits 
 
 ## Next Steps
 
-- Harden orchestration from a working pipeline into an operational system with stronger runtime validation, alerting, and run-level monitoring
 - Synthetic demand layer — simulate consumer demand from sell-in patterns to enable inventory position modeling
 - NRF 4-5-4 fiscal calendar dimension — enable period-comparable analysis across the standard retail planning calendar
 - Store-level planning simulation — model replenishment at the store level for a subset of stores across different demand profiles
@@ -274,7 +274,7 @@ Once the local Airflow foundation was verified, the work shifted from platform s
 
 ### What was added
 
-- A production-style Airflow DAG (`planning_os_weekly`) coordinating ingestion, validation, dbt freshness, dbt build, testing, pipeline health checks, and run summary publication
+- A production-style Airflow DAG (`planning_os_weekly`) coordinating ingestion, validation, dbt source freshness, snapshots, dbt run, staged test gate, pipeline health checks, and run summary publication
 - A custom Airflow image with a deliberately minimal runtime dependency set rather than the full project development environment
 - An Airflow-specific dbt profile mounted into the container at `/opt/airflow/.dbt`
 - Environment-driven credential loading from the repository root `.env`
@@ -308,12 +308,12 @@ This phase proved that the project can now run as an orchestrated analytics syst
 
 ## Canonical Metrics
 
-The repo now defines a small canonical metrics layer in [`dbt/models/docs/metric_definitions.md`](./dbt/models/docs/metric_definitions.md) so the same business metrics are described consistently across models and analyses.
+The repo defines shared metric definitions in [`dbt/models/docs/metric_definitions.md`](./dbt/models/docs/metric_definitions.md) so business metrics are specified once and referenced consistently across models, SQL templates, and notebooks.
 
 Core metrics include:
 - `sales` → `sum(sale_dollars)`
 - `units` → `sum(bottles_sold)`
-- `avg_selling_price` → `sum(sale_dollars) / sum(bottles_sold)`
+- `avg_selling_price` → `sum(sale_dollars) / nullif(sum(bottles_sold), 0)`
 - `gross_profit` → estimated gross profit proxy from sales less bottle cost
 - `share_pct` and `vendor_share` → share-of-total metrics with explicit scope
 - `yoy_growth_pct` and `cagr` → standardized growth-rate definitions for time-window comparisons
@@ -330,9 +330,9 @@ The pipeline enforces correctness at every layer:
 |---|---|
 | Source | Freshness checks — WARN >7d, ERROR >14d |
 | Staging | Schema tests — `not_null`, `unique`, `relationships` |
-| Intermediate | Deduplication audit, return-aware sign policy |
+| Intermediate | Deduplication audit, return-aware sign policy, temporal integrity of item version history |
 | Marts | Grain integrity, reconciliation, business rules |
-| CI | Staged dbt build across all layers on every push to `dev` |
+| CI | Staged model run across all layers, critical test gate, full test suite on every push to `dev` |
 
 Full lineage from `RAW_IOWA_LIQUOR` to analytical output is defined in [`dbt/models/exposures.yml`](./dbt/models/exposures.yml).
 

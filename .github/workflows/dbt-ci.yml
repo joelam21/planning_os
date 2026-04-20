@@ -106,16 +106,21 @@ jobs:
           dbt seed \
             --target ci
 
-      - name: dbt build — marts layer
+      - name: dbt run — marts layer
         run: |
-          dbt build \
+          dbt run \
             --select marts \
             --target ci
 
-      - name: dbt test — singular tests
+      - name: dbt test — critical gate
         run: |
           dbt test \
-            --select test_type:singular \
+            --select tag:critical \
+            --target ci
+
+      - name: dbt test — full suite
+        run: |
+          dbt test \
             --target ci
 
       - name: dbt source freshness

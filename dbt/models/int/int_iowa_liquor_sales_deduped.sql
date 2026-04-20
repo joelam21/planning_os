@@ -40,6 +40,7 @@ select
     estimated_total_cost,
     estimated_gross_profit,
     avg_revenue_per_bottle,
-    revenue_per_liter
+    revenue_per_liter,
+    upper(invoice_item_number) like 'RINV-%' as is_return
 from ranked_source
 where dedupe_rank = 1
